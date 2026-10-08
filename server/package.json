@@ -1,0 +1,32 @@
+{
+  "name": "@gatorgainz/server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --project tsconfig.build.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "jest --runInBand",
+    "db:setup": "tsx scripts/setup-db.ts"
+  },
+  "dependencies": {
+    "@gatorgainz/types": "0.1.0",
+    "bcrypt": "^6.0.0",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.15.0",
+    "@types/supertest": "^6.0.0",
+    "jest": "^30.5.2",
+    "supertest": "^7.1.0",
+    "ts-jest": "^29.4.0",
+    "tsx": "^4.20.0"
+  }
+}
