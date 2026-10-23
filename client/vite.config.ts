@@ -7,6 +7,9 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    proxy: { '/api': 'http://127.0.0.1:3001' },
+    proxy: {
+      // Preserve the browser's host so the API can verify same-origin authentication writes.
+      '/api': { target: 'http://127.0.0.1:3001', changeOrigin: false },
+    },
   },
 });

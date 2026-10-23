@@ -4,6 +4,29 @@ export interface UserSummary {
   displayName: string;
 }
 
+/** The signed-in user's profile. Passwords and session tokens never appear in JSON. */
+export interface AuthUser {
+  id: string;
+  fullName: string;
+  email: string;
+  joinedAt: string;
+}
+
+export interface AuthResponse {
+  user: AuthUser;
+}
+
+export interface RegisterRequest {
+  fullName: string;
+  email: string;
+  password: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
 export interface Workout {
   id: string;
   userId: string;

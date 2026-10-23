@@ -1,9 +1,9 @@
--- Initial scaffold schema. Later schema changes should use versioned migrations.
+-- Bootstrap schema. Later changes are applied from db/migrations by npm run db:setup.
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   display_name VARCHAR(80) NOT NULL CHECK (length(trim(display_name)) > 0),
   email VARCHAR(254) NOT NULL UNIQUE,
-  -- Demo profiles have no login. Future registered accounts must store a bcrypt hash.
+  -- Demo profiles have no login. Registration always supplies a bcrypt hash.
   password_hash TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
