@@ -3,6 +3,13 @@ jobs:
   check:
     docker:
       - image: cimg/node:22.14
+      - image: postgres:17
+        environment:
+          POSTGRES_USER: gatorgainz
+          POSTGRES_PASSWORD: gatorgainz_ci
+          POSTGRES_DB: gatorgainz_auth_test
+    environment:
+      TEST_DATABASE_URL: postgresql://gatorgainz:gatorgainz_ci@127.0.0.1:5432/gatorgainz_auth_test
     steps:
       - checkout
       - restore_cache:
@@ -15,6 +22,24 @@ jobs:
           key: npm-v1-{{ arch }}-{{ checksum "package-lock.json" }}
           paths:
             - ~/.npm
+      - run:
+          name: Wait for PostgreSQL integration database
+          command: |
+            node <<'NODE'
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL, connectionTimeoutMillis: 1000 });
+            (async () => {
+              try {
+                for (let attempt = 0; attempt < 30; attempt++) {
+                  try { await pool.query('SELECT 1'); return; }
+                  catch (error) {
+                    if (attempt === 29) throw error;
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                  }
+                }
+              } finally { await pool.end(); }
+            })().catch(error => { console.error(error.message); process.exitCode = 1; });
+            NODE
       - run:
           name: Check TypeScript, run Jest, and build
           command: npm run check

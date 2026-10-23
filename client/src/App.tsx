@@ -1,17 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import type { AuthUser } from "@gatorgainz/types";
+import { getAuthErrorMessage, getCurrentUser, loginAccount, logoutAccount, registerAccount } from "./auth-api";
 import gatorMark from "./assets/gator-gainz-mark.png";
 
 type Tab = "home" | "log" | "community" | "profile";
 type Theme = "light" | "dark";
 type AuthMode = "login" | "register";
-type UserAccount = {
-  id: string;
-  fullName: string;
-  email: string;
-  passwordHash: string;
-  passwordSalt: string;
-  joinedAt: string;
-};
+type UserAccount = AuthUser;
 type IconName =
   | "home"
   | "plus"
@@ -159,18 +154,6 @@ const leaders = [
   { name: "Sam Rivera", handle: "@samstrong", points: 3205, initials: "SR", tone: "yellow" },
 ];
 
-const accountsStorageKey = "gatorgainz-accounts";
-const currentUserStorageKey = "gatorgainz-current-user";
-
-function getStoredAccounts(): UserAccount[] {
-  try {
-    const saved = window.localStorage.getItem(accountsStorageKey);
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
-
 function getInitials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
 }
@@ -181,12 +164,6 @@ function getFirstName(name: string) {
 
 function getHandle(user: UserAccount) {
   return `@${user.email.split("@")[0].replace(/[^a-z0-9]/gi, "").toLowerCase()}`;
-}
-
-async function hashPassword(password: string, salt: string) {
-  const data = new TextEncoder().encode(`${salt}:${password}`);
-  const digest = await window.crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 const iconPaths: Record<IconName, ReactNode> = {
@@ -267,14 +244,27 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: UserAccount) 
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
     setMessage("");
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail || !password || (mode === "register" && !fullName.trim())) {
       setMessage("Complete all required fields to continue.");
       return;
     }
-    if (mode === "register" && password.length < 8) {
-      setMessage("Create a password with at least 8 characters.");
+    if (normalizedEmail.length > 254) {
+      setMessage("Use an email address with at most 254 characters.");
+      return;
+    }
+    if (mode === "register" && fullName.trim().length > 80) {
+      setMessage("Use a full name with at most 80 characters.");
+      return;
+    }
+    if (mode === "register" && Array.from(password).length < 15) {
+      setMessage("Create a password with at least 15 characters.");
+      return;
+    }
+    if (mode === "register" && new TextEncoder().encode(password).length > 72) {
+      setMessage("Use a password with at most 72 UTF-8 bytes. Some characters use more than one byte.");
       return;
     }
     if (mode === "register" && password !== confirmPassword) {
@@ -284,34 +274,14 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: UserAccount) 
 
     setIsSubmitting(true);
     try {
-      const accounts = getStoredAccounts();
-      if (mode === "register") {
-        if (accounts.some((account) => account.email === normalizedEmail)) {
-          setMessage("An account already exists for this email. Try logging in.");
-          return;
-        }
-        const passwordSalt = window.crypto.randomUUID();
-        const account: UserAccount = {
-          id: window.crypto.randomUUID(),
-          fullName: fullName.trim(),
-          email: normalizedEmail,
-          passwordHash: await hashPassword(password, passwordSalt),
-          passwordSalt,
-          joinedAt: new Date().toISOString(),
-        };
-        window.localStorage.setItem(accountsStorageKey, JSON.stringify([...accounts, account]));
-        window.localStorage.setItem(currentUserStorageKey, account.id);
-        onAuthenticated(account);
-        return;
-      }
-
-      const account = accounts.find((candidate) => candidate.email === normalizedEmail);
-      if (!account || (await hashPassword(password, account.passwordSalt)) !== account.passwordHash) {
-        setMessage("Email or password is incorrect.");
-        return;
-      }
-      window.localStorage.setItem(currentUserStorageKey, account.id);
+      const account = mode === "register"
+        ? await registerAccount({ fullName: fullName.trim(), email: normalizedEmail, password })
+        : await loginAccount({ email: normalizedEmail, password });
+      setPassword("");
+      setConfirmPassword("");
       onAuthenticated(account);
+    } catch (error) {
+      setMessage(getAuthErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -326,28 +296,28 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: UserAccount) 
         <div className="auth-title">{mode === "login" ? "Get back in the game" : "Start your Gainz journey"}</div>
         <p className="auth-subtitle">{mode === "login" ? "Log in to keep your workouts, points, and progress moving." : "Create your account and make every workout count."}</p>
         <div className="auth-toggle" aria-label="Authentication option">
-          <Button className={mode === "login" ? "active" : ""} onClick={() => switchMode("login")}>Log in</Button>
-          <Button className={mode === "register" ? "active" : ""} onClick={() => switchMode("register")}>Create account</Button>
+          <Button className={mode === "login" ? "active" : ""} disabled={isSubmitting} onClick={() => switchMode("login")}>Log in</Button>
+          <Button className={mode === "register" ? "active" : ""} disabled={isSubmitting} onClick={() => switchMode("register")}>Create account</Button>
         </div>
         <form className="auth-form" onSubmit={submit}>
           {mode === "register" && (
             <label>
               <span>Full name</span>
-              <input autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Jordan Smith" />
+              <input autoComplete="name" required maxLength={80} disabled={isSubmitting} value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Jordan Smith" />
             </label>
           )}
           <label>
             <span>Email address</span>
-            <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+            <input type="email" autoComplete="username" required maxLength={254} disabled={isSubmitting} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
           </label>
           <label>
             <span>Password</span>
-            <input type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === "login" ? "Enter your password" : "At least 8 characters"} />
+            <input type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required disabled={isSubmitting} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === "login" ? "Enter your password" : "At least 15 characters"} />
           </label>
           {mode === "register" && (
             <label>
               <span>Confirm password</span>
-              <input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Enter it again" />
+              <input type="password" autoComplete="new-password" required disabled={isSubmitting} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Enter it again" />
             </label>
           )}
           {message && <div className="auth-message" role="alert">{message}</div>}
@@ -355,7 +325,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: UserAccount) 
             {isSubmitting ? "Please wait..." : mode === "login" ? "Log in to GatorGainz" : "Create my account"} <Icon name="arrow" size={17} />
           </Button>
         </form>
-        <p className="auth-footnote">Your account stays on this device. Passwords are stored as one-way hashes, never as readable text.</p>
+        <p className="auth-footnote">Your account is saved on the server. Workouts currently stay in this browser.</p>
       </Card>
       <div className="auth-stripe"><i /><i /></div>
     </main>
@@ -738,18 +708,25 @@ const sessionStorageKey = "gatorgainz-workout-session";
 const completedSessionsStorageKey = "gatorgainz-completed-sessions";
 const pinnedWorkoutsStorageKey = "gatorgainz-pinned-workouts";
 
-function loadSessionDraft() {
+function accountStorageKey(key: string, userId: string) {
+  return `${key}:${userId}`;
+}
+
+function loadSessionDraft(userId: string) {
   const fallback = { selectedName: workouts[1].name, sets: 4, reps: 8, minutes: 30, metricValue: 3, exercises: [] as SessionExercise[] };
   try {
-    const saved = window.localStorage.getItem(sessionStorageKey);
+    const saved = window.localStorage.getItem(accountStorageKey(sessionStorageKey, userId));
     return saved ? { ...fallback, ...JSON.parse(saved) } : fallback;
   } catch {
     return fallback;
   }
 }
 
-function WorkoutLogger({ onComplete }: { onComplete: (session: CompletedSession) => void }) {
-  const [savedDraft] = useState(loadSessionDraft);
+function WorkoutLogger({ userId, onComplete }: { userId: string; onComplete: (session: CompletedSession) => void }) {
+  const draftKey = accountStorageKey(sessionStorageKey, userId);
+  const pinsKey = accountStorageKey(pinnedWorkoutsStorageKey, userId);
+  const muscleMapKey = accountStorageKey("gatorgainz-show-muscle-map", userId);
+  const [savedDraft] = useState(() => loadSessionDraft(userId));
   const [selected, setSelected] = useState<Workout>(() => workouts.find((workout) => workout.name === savedDraft.selectedName) ?? workouts[1]);
   const [sets, setSets] = useState(savedDraft.sets);
   const [reps, setReps] = useState(savedDraft.reps);
@@ -760,12 +737,12 @@ function WorkoutLogger({ onComplete }: { onComplete: (session: CompletedSession)
   const [metricValue, setMetricValue] = useState(savedDraft.metricValue);
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>(savedDraft.exercises);
   const [showMuscleMap, setShowMuscleMap] = useState(() => {
-    const saved = window.localStorage.getItem("gatorgainz-show-muscle-map");
+    const saved = window.localStorage.getItem(muscleMapKey);
     return saved !== "false";
   });
   const [pinnedWorkouts, setPinnedWorkouts] = useState<string[]>(() => {
     try {
-      const saved = window.localStorage.getItem(pinnedWorkoutsStorageKey);
+      const saved = window.localStorage.getItem(pinsKey);
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -786,7 +763,7 @@ function WorkoutLogger({ onComplete }: { onComplete: (session: CompletedSession)
   const sessionPoints = sessionExercises.reduce((total, exercise) => total + exercise.earned, 0);
 
   useEffect(() => {
-    window.localStorage.setItem(sessionStorageKey, JSON.stringify({
+    window.localStorage.setItem(draftKey, JSON.stringify({
       selectedName: selected.name,
       sets,
       reps,
@@ -794,14 +771,14 @@ function WorkoutLogger({ onComplete }: { onComplete: (session: CompletedSession)
       metricValue,
       exercises: sessionExercises,
     }));
-  }, [selected, sets, reps, minutes, metricValue, sessionExercises]);
+  }, [draftKey, selected, sets, reps, minutes, metricValue, sessionExercises]);
 
   useEffect(() => {
-    window.localStorage.setItem(pinnedWorkoutsStorageKey, JSON.stringify(pinnedWorkouts));
-  }, [pinnedWorkouts]);
+    window.localStorage.setItem(pinsKey, JSON.stringify(pinnedWorkouts));
+  }, [pinsKey, pinnedWorkouts]);
   useEffect(() => {
-    window.localStorage.setItem("gatorgainz-show-muscle-map", showMuscleMap.toString());
-  }, [showMuscleMap]);
+    window.localStorage.setItem(muscleMapKey, showMuscleMap.toString());
+  }, [muscleMapKey, showMuscleMap]);
 
   function togglePinned(workoutName: string) {
     setPinnedWorkouts((current) => current.includes(workoutName)
@@ -855,7 +832,7 @@ function WorkoutLogger({ onComplete }: { onComplete: (session: CompletedSession)
       loggedAt: new Date(),
     });
     setSessionExercises([]);
-    window.localStorage.removeItem(sessionStorageKey);
+    window.localStorage.removeItem(draftKey);
   }
 
   return (
@@ -1082,7 +1059,7 @@ function Community({ points, user }: { points: number; user: UserAccount }) {
   );
 }
 
-function Profile({ points, completed, theme, setTheme, user, onLogout }: { points: number; completed: number; theme: Theme; setTheme: (theme: Theme) => void; user: UserAccount; onLogout: () => void }) {
+function Profile({ points, completed, theme, setTheme, user, onLogout, isLoggingOut, logoutError }: { points: number; completed: number; theme: Theme; setTheme: (theme: Theme) => void; user: UserAccount; onLogout: () => void; isLoggingOut: boolean; logoutError: string }) {
   const [showSettings, setShowSettings] = useState(false);
   return (
     <div className="page">
@@ -1109,7 +1086,8 @@ function Profile({ points, completed, theme, setTheme, user, onLogout }: { point
               {theme === "dark" && <Icon name="check" size={16} />}
             </Button>
           </div>
-          <Button className="secondary-button logout-button" onClick={onLogout}><Icon name="logout" size={17} /> Log out of GatorGainz</Button>
+          <Button className="secondary-button logout-button" onClick={onLogout} disabled={isLoggingOut}><Icon name="logout" size={17} /> {isLoggingOut ? "Logging out..." : "Log out of GatorGainz"}</Button>
+          {logoutError && <div className="auth-message" role="alert">{logoutError}</div>}
         </Card>
       )}
       <Card className="profile-hero">
@@ -1156,21 +1134,15 @@ function Profile({ points, completed, theme, setTheme, user, onLogout }: { point
   );
 }
 
-export default function App() {
+function AuthenticatedApp({ currentUser, theme, setTheme, onLogout }: { currentUser: UserAccount; theme: Theme; setTheme: (theme: Theme) => void; onLogout: () => Promise<void> }) {
   const [tab, setTab] = useState<Tab>("home");
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    const currentUserId = window.localStorage.getItem(currentUserStorageKey);
-    return getStoredAccounts().find((account) => account.id === currentUserId) ?? null;
-  });
-  const [theme, setTheme] = useState<Theme>(() => {
-    const savedTheme = window.localStorage.getItem("gatorgainz-theme");
-    if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  });
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+  const completedKey = accountStorageKey(completedSessionsStorageKey, currentUser.id);
   const [sessionToastPoints, setSessionToastPoints] = useState<number | null>(null);
   const [completedSessions, setCompletedSessions] = useState<CompletedSession[]>(() => {
     try {
-      const saved = window.localStorage.getItem(completedSessionsStorageKey);
+      const saved = window.localStorage.getItem(completedKey);
       return saved ? JSON.parse(saved).map((session: CompletedSession) => ({ ...session, loggedAt: new Date(session.loggedAt) })) : [];
     } catch {
       return [];
@@ -1181,11 +1153,8 @@ export default function App() {
   const completed = 46 + completedSessions.length;
   const titles = useMemo(() => ({ home: "Overview", log: "Log workout", community: "Community", profile: "Account" }), []);
   useEffect(() => {
-    window.localStorage.setItem(completedSessionsStorageKey, JSON.stringify(completedSessions));
-  }, [completedSessions]);
-  useEffect(() => {
-    window.localStorage.setItem("gatorgainz-theme", theme);
-  }, [theme]);
+    window.localStorage.setItem(completedKey, JSON.stringify(completedSessions));
+  }, [completedKey, completedSessions]);
   useEffect(() => {
     if (sessionToastPoints === null) return;
     const timer = window.setTimeout(() => setSessionToastPoints(null), 3200);
@@ -1196,31 +1165,104 @@ export default function App() {
     setCompletedSessions((current) => [session, ...current]);
     setSessionToastPoints(session.earned);
   }
-  function logout() {
-    window.localStorage.removeItem(currentUserStorageKey);
-    setCurrentUser(null);
-    setTab("home");
-  }
-
-  if (!currentUser) {
-    return (
-      <div className="app-shell auth-shell" data-theme={theme}>
-        <AuthScreen onAuthenticated={setCurrentUser} />
-      </div>
-    );
+  async function logout() {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    setLogoutError("");
+    try {
+      await onLogout();
+    } catch (error) {
+      setLogoutError(`Could not log out. ${getAuthErrorMessage(error)}`);
+    } finally {
+      setIsLoggingOut(false);
+    }
   }
 
   return (
-    <div className="app-shell" data-theme={theme}>
+    <>
       <Sidebar tab={tab} setTab={setTab} user={currentUser} />
       <main className="main-area">
         <TopBar title={titles[tab]} points={points} />
         {tab === "home" && <Dashboard goLog={() => setTab("log")} points={points} completed={completed} latestSession={completedSessions[0]} user={currentUser} />}
-        {tab === "log" && <WorkoutLogger onComplete={completeSession} />}
+        {tab === "log" && <WorkoutLogger userId={currentUser.id} onComplete={completeSession} />}
         {tab === "community" && <Community points={points} user={currentUser} />}
-        {tab === "profile" && <Profile points={points} completed={completed} theme={theme} setTheme={setTheme} user={currentUser} onLogout={logout} />}
+        {tab === "profile" && <Profile points={points} completed={completed} theme={theme} setTheme={setTheme} user={currentUser} onLogout={logout} isLoggingOut={isLoggingOut} logoutError={logoutError} />}
         {sessionToastPoints !== null && <div className="session-toast"><Icon name="bolt" size={17} /> Session points: +{sessionToastPoints}</div>}
       </main>
+    </>
+  );
+}
+
+function SessionStatus({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <main className="auth-page">
+      <div className="auth-brand"><Logo /><span>Train. Track. Rise.</span></div>
+      <Card className="auth-card">
+        <div className="auth-icon"><Icon name="lock" size={24} /></div>
+        <div className="auth-title">{error ? "Let's reconnect" : "Welcome to GatorGainz"}</div>
+        {error
+          ? <><div className="auth-message" role="alert">We could not check your session. {error}</div><Button className="primary-button auth-submit" onClick={onRetry}>Try again <Icon name="arrow" size={17} /></Button></>
+          : <p className="auth-subtitle" role="status">Checking your session...</p>}
+      </Card>
+      <div className="auth-stripe"><i /><i /></div>
+    </main>
+  );
+}
+
+export default function App() {
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [sessionError, setSessionError] = useState("");
+  const [sessionAttempt, setSessionAttempt] = useState(0);
+  const [theme, setTheme] = useState<Theme>(() => {
+    const savedTheme = window.localStorage.getItem("gatorgainz-theme");
+    if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+
+  useEffect(() => {
+    // Old prototype accounts are not credentials for server accounts.
+    try {
+      window.localStorage.removeItem("gatorgainz-accounts");
+      window.localStorage.removeItem("gatorgainz-current-user");
+    } catch {
+      // Cookie sessions can still work when browser storage is unavailable.
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setIsCheckingSession(true);
+    setSessionError("");
+    getCurrentUser()
+      .then((user) => {
+        if (active) setCurrentUser(user);
+      })
+      .catch((error: unknown) => {
+        if (active) setSessionError(getAuthErrorMessage(error));
+      })
+      .finally(() => {
+        if (active) setIsCheckingSession(false);
+      });
+    return () => { active = false; };
+  }, [sessionAttempt]);
+
+  useEffect(() => {
+    window.localStorage.setItem("gatorgainz-theme", theme);
+  }, [theme]);
+
+  async function logout() {
+    await logoutAccount();
+    setCurrentUser(null);
+  }
+
+  return (
+    <div className={`app-shell${currentUser ? "" : " auth-shell"}`} data-theme={theme}>
+      {isCheckingSession || sessionError
+        ? <SessionStatus error={sessionError} onRetry={() => setSessionAttempt((attempt) => attempt + 1)} />
+        : currentUser
+          ? <AuthenticatedApp key={currentUser.id} currentUser={currentUser} theme={theme} setTheme={setTheme} onLogout={logout} />
+          : <AuthScreen onAuthenticated={setCurrentUser} />}
     </div>
   );
 }
