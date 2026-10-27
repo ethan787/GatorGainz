@@ -19,6 +19,24 @@ describe('read-only fitness API', () => {
       expect(Object.keys(user).sort()).toEqual(['displayName', 'id']);
   });
 
+  it('fails the health check when the configured database is unavailable', async () => {
+    const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const failingApp = createApp({
+        ...demoStore,
+        dataSource: 'postgres',
+        checkConnection: async () => {
+          throw new Error('private connection details');
+        },
+      });
+      const response = await request(failingApp).get('/api/health');
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: 'Unable to complete the request.' });
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it('returns workouts with valid user references', async () => {
     const response = await request(app).get('/api/workouts');
     const users = await demoStore.getUsers();

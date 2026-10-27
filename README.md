@@ -70,6 +70,7 @@ db/                             PostgreSQL schema, versioned migrations, sample 
 docs/authentication.md           Account implementation and code-review guide
 docs/backlog.md                  Starter tasks for Jira
 .circleci/config.yml             Install, typecheck, test, and build
+docs/ci.md                       CircleCI connection and backend validation guide
 ```
 
 ## API
@@ -105,9 +106,11 @@ npm test
 npm run build
 # Run all three:
 npm run check
+# Require PostgreSQL tests and generate CI reports:
+npm run check:ci
 ```
 
-CircleCI runs `npm ci` and `npm run check` on commits using the lockfile. TypeScript checking and production builds include the Figma-designed client. Jest covers authentication, API responses, goal progress, rankings, error handling, and bcrypt password helpers. PostgreSQL integration tests use a dedicated `TEST_DATABASE_URL`; see [the authentication guide](docs/authentication.md) before running `npm run test:integration`. The logo is included directly in the client assets, so the app no longer requires a separate Git LFS download.
+CircleCI installs from the lockfile, checks TypeScript, runs all backend tests against a dedicated PostgreSQL service, uploads JUnit results and coverage, and builds the client and API. `npm run check:ci` reproduces these checks locally and requires `TEST_DATABASE_URL`; `npm run test:integration` runs just the PostgreSQL suites and also requires that URL. Normal `npm test` and `npm run check` skip database suites when the URL is absent. See [the CI and backend validation guide](docs/ci.md) to connect `ethan787/GatorGainz` in CircleCI and run the checks locally. The logo is included directly in the client assets, so the app no longer requires a separate Git LFS download.
 
 Run `npm run format` to format source and configuration files with Prettier.
 

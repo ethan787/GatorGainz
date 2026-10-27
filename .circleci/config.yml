@@ -23,6 +23,9 @@ jobs:
           paths:
             - ~/.npm
       - run:
+          name: Check client and backend TypeScript
+          command: npm run typecheck
+      - run:
           name: Wait for PostgreSQL integration database
           command: |
             node <<'NODE'
@@ -41,8 +44,19 @@ jobs:
             })().catch(error => { console.error(error.message); process.exitCode = 1; });
             NODE
       - run:
-          name: Check TypeScript, run Jest, and build
-          command: npm run check
+          name: Validate backend with PostgreSQL and collect coverage
+          command: npm run test:ci
+      - store_test_results:
+          path: server/test-results
+      - store_artifacts:
+          path: server/test-results
+          destination: backend-test-results
+      - store_artifacts:
+          path: server/coverage
+          destination: backend-coverage
+      - run:
+          name: Build client and backend
+          command: npm run build
 workflows:
   build-and-test:
     jobs:
