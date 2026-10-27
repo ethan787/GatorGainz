@@ -139,7 +139,7 @@ $env:TEST_DATABASE_URL = 'postgresql://gatorgainz:gatorgainz_local@127.0.0.1:543
 npm run test:integration
 ```
 
-CircleCI runs a PostgreSQL service and supplies a dedicated test connection, so the SQL tests run alongside the normal checks. Local Jest runs without `TEST_DATABASE_URL` explicitly skip the database integration suite.
+CircleCI runs a PostgreSQL service and supplies a dedicated test connection. `npm run test:ci` runs all backend suites with JUnit reports and coverage; `npm run check:ci` also typechecks and builds the application. Both commands, and `npm run test:integration`, fail if `TEST_DATABASE_URL` is missing. Normal local `npm test` runs without that variable skip the database suites. The fitness PostgreSQL suite also checks public API queries, date boundaries, rankings, and database constraints. See [the CI guide](ci.md) for CircleCI connection and local setup steps.
 
 Verified locally against PostgreSQL 17.11 for this change:
 
