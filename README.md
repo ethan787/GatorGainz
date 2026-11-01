@@ -4,15 +4,15 @@ GatorGainz combines the Figma-designed fitness interface with an Express REST AP
 
 ## Stack
 
-| Area      | Technology                                                                 |
-| --------- | -------------------------------------------------------------------------- |
-| Language  | TypeScript across client, server, and shared API contracts                 |
-| Client    | React, Vite, Tailwind CSS 4, custom CSS                                    |
-| Server    | Node.js, Express                                                           |
-| Database  | PostgreSQL via `pg`                                                        |
-| Passwords | bcrypt password hashing with database-backed cookie sessions               |
-| Tests     | Jest and Supertest                                                         |
-| Tooling   | npm workspaces, CircleCI, Git; suggested Jira backlog in `docs/backlog.md` |
+| Area      | Technology                                                          |
+| --------- | ------------------------------------------------------------------- |
+| Language  | TypeScript across client, server, and shared API contracts          |
+| Client    | React, Vite, Tailwind CSS 4, custom CSS                             |
+| Server    | Node.js, Express                                                    |
+| Database  | PostgreSQL via `pg`                                                 |
+| Passwords | bcrypt password hashing with database-backed cookie sessions        |
+| Tests     | Jest and Supertest                                                  |
+| Tooling   | npm workspaces, GitHub Actions, ESLint, Prettier; optional CircleCI |
 
 ## Run locally
 
@@ -69,8 +69,10 @@ shared/index.d.ts                Client/server API contracts
 db/                             PostgreSQL schema, versioned migrations, sample rows
 docs/authentication.md           Account implementation and code-review guide
 docs/backlog.md                  Starter tasks for Jira
-.circleci/config.yml             Install, typecheck, test, and build
-docs/ci.md                       CircleCI connection and backend validation guide
+.github/workflows/ci.yml         Required GitHub Actions quality gate
+.circleci/config.yml             Optional CircleCI validation
+CONTRIBUTING.md                  Contributor setup and local checks
+docs/ci.md                       CI checks, main protection, and emergency process
 ```
 
 ## API
@@ -101,16 +103,18 @@ Rankings are a SQL view computed from workouts. Goals count workouts between the
 ## Checks and builds
 
 ```sh
+npm run format:check
+npm run lint
 npm run typecheck
 npm test
 npm run build
-# Run all three:
+# Run all five:
 npm run check
 # Require PostgreSQL tests and generate CI reports:
 npm run check:ci
 ```
 
-CircleCI installs from the lockfile, checks TypeScript, runs all backend tests against a dedicated PostgreSQL service, uploads JUnit results and coverage, and builds the client and API. `npm run check:ci` reproduces these checks locally and requires `TEST_DATABASE_URL`; `npm run test:integration` runs just the PostgreSQL suites and also requires that URL. Normal `npm test` and `npm run check` skip database suites when the URL is absent. See [the CI and backend validation guide](docs/ci.md) to connect `ethan787/GatorGainz` in CircleCI and run the checks locally. The logo is included directly in the client assets, so the app no longer requires a separate Git LFS download.
+GitHub Actions installs from the lockfile, checks formatting, lint, and TypeScript, runs all backend tests against a disposable PostgreSQL service, uploads JUnit results and coverage, and builds the client and API. The final `CI quality gate` succeeds only when all checks pass; it must be required in `main` branch protection to block merges. `npm run check:ci` reproduces these checks locally and requires `TEST_DATABASE_URL`; `npm run test:integration` runs just the PostgreSQL suites and also requires that URL. Normal `npm test` and `npm run check` skip database suites when the URL is absent. See [the CI guide](docs/ci.md) for setup, branch protection, and the emergency process, and [CONTRIBUTING.md](CONTRIBUTING.md) to get started. CircleCI is retained as an optional runner of the same checks. The logo is included directly in the client assets, so a Git LFS download is not needed.
 
 Run `npm run format` to format source and configuration files with Prettier.
 

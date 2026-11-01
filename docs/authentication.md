@@ -129,7 +129,7 @@ Without `DATABASE_URL`, the existing read-only demo API remains available, while
 
 ## Validation
 
-`npm run check` typechecks both workspaces, runs Jest, and builds the client and API. Authentication route tests cover successful and rejected requests, cookie settings, session invalidation, validation, throttling, and origin/header protections.
+`npm run check` checks formatting and lint, typechecks all workspaces, runs Jest, and builds the client and API. Authentication route tests cover successful and rejected requests, cookie settings, session invalidation, validation, throttling, and origin/header protections.
 
 `server/tests/auth-postgres.test.ts` exercises the actual SQL store and HTTP routes when `TEST_DATABASE_URL` is provided. It uses a randomly named schema inside a dedicated test database, and drops only that schema afterward. Tests cover database persistence across app instances, case-insensitive registration races, transaction rollback, stored password/token hashes, expiry, and logout revocation.
 
@@ -139,7 +139,7 @@ $env:TEST_DATABASE_URL = 'postgresql://gatorgainz:gatorgainz_local@127.0.0.1:543
 npm run test:integration
 ```
 
-CircleCI runs a PostgreSQL service and supplies a dedicated test connection. `npm run test:ci` runs all backend suites with JUnit reports and coverage; `npm run check:ci` also typechecks and builds the application. Both commands, and `npm run test:integration`, fail if `TEST_DATABASE_URL` is missing. Normal local `npm test` runs without that variable skip the database suites. The fitness PostgreSQL suite also checks public API queries, date boundaries, rankings, and database constraints. See [the CI guide](ci.md) for CircleCI connection and local setup steps.
+GitHub Actions runs a PostgreSQL service and supplies a dedicated test connection. `npm run test:ci` runs all backend suites with JUnit reports and coverage; `npm run check:ci` also checks formatting, lint, types, and production builds. Both commands, and `npm run test:integration`, fail if `TEST_DATABASE_URL` is missing. Normal local `npm test` runs without that variable skip the database suites. The fitness PostgreSQL suite also checks public API queries, date boundaries, rankings, and database constraints. See [the CI guide](ci.md) for required checks and local setup steps.
 
 Verified locally against PostgreSQL 17.11 for this change:
 

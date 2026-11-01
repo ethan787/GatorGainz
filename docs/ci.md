@@ -1,66 +1,69 @@
-# CI and backend validation
+# CI quality gates
 
-GatorGainz uses CircleCI. The workflow is `build-and-test`, with one job named `check`.
-The configuration lives in [`.circleci/config.yml`](../.circleci/config.yml).
+GitHub Actions runs [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) for every
+pull request targeting `main`, pushes to `main`, and merge queue groups. Manual runs
+are available after the workflow reaches the default branch. There are no path filters:
+documentation and configuration changes receive the same checks.
 
-## Connect the GitHub repository
+## Checks and reports
 
-1. Commit and push the CI changes to a branch in `ethan787/GatorGainz` and open a pull request.
-2. Sign in to [CircleCI](https://app.circleci.com/) and choose **Create Project** or
-   **Set up a project**, depending on your organization.
-3. Connect GitHub, authorize the CircleCI GitHub App for `ethan787/GatorGainz`, and select
-   that repository. If it is already connected, use its existing project.
-4. Use the existing configuration at `.circleci/config.yml` on your branch. Keep a push
-   trigger enabled so new commits run the pipeline.
-5. Start the first run. Confirm the `check` job completes, the **Tests** tab contains
-   both PostgreSQL suites, and the **Artifacts** tab contains coverage and JUnit reports.
-6. After a successful run, optionally require the CircleCI check in the GitHub branch
-   rules for your default branch. Select the actual check name reported on the pull request.
+Jobs install locked dependencies with `npm ci` and use Node.js 22 from `.nvmrc`.
+Static checks run independently so one failure does not hide the other results.
 
-CircleCI documents both setup flows in its [project setup guide](https://circleci.com/docs/guides/getting-started/create-project/).
-Repository access must be authorized in CircleCI/GitHub; a checked-in config alone does
-not establish that connection.
+| GitHub check      | Local command                                 | Purpose                                                                                                                          |
+| ----------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `CI typecheck`    | `npm run typecheck`                           | Check client, server, tests, and shared API declarations. Every workspace must supply a typecheck script.                        |
+| `CI lint`         | `npm run lint`                                | ESLint recommended JavaScript/TypeScript rules and React Hooks rules; warnings also fail.                                        |
+| `CI format:check` | `npm run format:check`                        | Verify Prettier formatting without modifying files.                                                                              |
+| `CI build`        | `npm run build`                               | Compile the API and bundle the production client.                                                                                |
+| `CI tests`        | `npm run test:ci`                             | Run all backend Jest suites against disposable PostgreSQL 17, with JUnit and coverage reports.                                   |
+| `CI quality gate` | `npm run check:ci` runs the underlying checks | Succeed only when every static/build check and the test job succeeds. Failed, cancelled, or skipped dependencies fail this gate. |
 
-The CI job creates a disposable PostgreSQL 17 service with the test database
-`gatorgainz_auth_test`. Its credentials in the config are local to that CI service.
-No production database connection or application secrets are needed for these tests.
+The final gate runs even when a dependency fails. Require the exact name **`CI quality gate`**
+from the **GitHub Actions** app in the `main` branch rule. Keep this job name and branch
+protection in sync if renaming it.
 
-## What a run checks
+CI credentials are scoped to the disposable database `gatorgainz_auth_test`; no application
+secrets are needed. Missing `TEST_DATABASE_URL` fails `test:ci` instead of skipping tests.
+Each PostgreSQL suite creates its own random schema, applies real migrations, and removes
+that schema afterward.
 
-| Step               | Validation                                                                                |
-| ------------------ | ----------------------------------------------------------------------------------------- |
-| Install            | `npm ci` installs the exact dependencies in `package-lock.json`.                          |
-| Typecheck          | `npm run typecheck` checks the client, backend, and test TypeScript.                      |
-| Database readiness | A bounded connection check waits for the PostgreSQL service.                              |
-| Backend validation | `npm run test:ci` requires `TEST_DATABASE_URL` and runs all Jest suites with coverage.    |
-| Reports            | JUnit XML is uploaded to the Tests tab; raw results and coverage are stored as artifacts. |
-| Build              | `npm run build` compiles the API and builds the production client.                        |
+The `backend-test-reports` artifact contains `server/test-results/jest/junit.xml` and
+`server/coverage/`, including `lcov-report/index.html`. Upload is attempted even after
+test failure; failures before Jest starts may not produce reports. Artifacts are kept
+for seven days. Coverage is a baseline report; no percentage threshold is imposed.
 
-Test reports use [`jest-junit`](https://github.com/jest-community/jest-junit) and CircleCI's
-[`store_test_results`](https://circleci.com/docs/guides/test/collect-test-data/) step.
-Coverage is collected as a baseline; there is no minimum coverage gate yet.
+The existing [CircleCI configuration](../.circleci/config.yml) is retained for connected
+CircleCI projects and includes the same formatting, lint, type, test, and build checks.
+GitHub Actions is the required merge gate; a CircleCI connection is optional.
 
-## Run the same validation locally
+## Run the same checks locally
 
-Use the repository's supported Node.js version and install dependencies from the root:
+From the repository root, use Node.js 22 (`nvm use` where available), then:
 
 ```sh
 npm ci
+npm run format:check
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
 
-Start PostgreSQL. For a fresh Docker setup:
+`npm run check` combines those five checks. `npm test` skips PostgreSQL suites when no
+test URL is configured. To reproduce full CI validation, start a dedicated test database.
+For a fresh Docker setup:
 
 ```sh
 docker compose up -d db
 docker compose exec db createdb -U gatorgainz gatorgainz_auth_test
 ```
 
-Create the dedicated test database only once. If it already exists, keep it and skip
-`createdb`. The prepared native Windows instance can instead be started with
-`npm run db:local:start`; it already includes the dedicated test database.
+Create the test database only once; skip `createdb` if it exists. The prepared native
+Windows instance can instead be started with `npm run db:local:start`; it already includes
+the dedicated test database.
 
-Set `TEST_DATABASE_URL` to that database, using your local credentials. For Docker's
-development defaults, in PowerShell:
+For Docker's development credentials, in PowerShell:
 
 ```powershell
 $env:TEST_DATABASE_URL = 'postgresql://gatorgainz:gatorgainz_local@127.0.0.1:5432/gatorgainz_auth_test'
@@ -73,50 +76,98 @@ Or in a POSIX shell:
 TEST_DATABASE_URL='postgresql://gatorgainz:gatorgainz_local@127.0.0.1:5432/gatorgainz_auth_test' npm run check:ci
 ```
 
-You can also set `TEST_DATABASE_URL` in the ignored `server/.env` file. Existing
-environment variables take precedence. Never point tests at a production database.
-The test role needs permission to create schemas in the dedicated database.
+You can also set `TEST_DATABASE_URL` in ignored `server/.env`. Existing environment
+variables take precedence. Use a dedicated test database whose role can create schemas.
+Never use a production database.
 
-| Command                    | Purpose                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| `npm test`                 | Normal Jest run; PostgreSQL suites skip when no test URL is configured.        |
-| `npm run test:integration` | Both `*-postgres.test.ts` suites; missing test URL is an error.                |
-| `npm run test:ci`          | All backend tests, required PostgreSQL connection, JUnit output, and coverage. |
-| `npm run check`            | Normal typecheck, tests, and build. Database tests remain optional.            |
-| `npm run check:ci`         | Typecheck, required database validation, and build.                            |
+| Command                    | Purpose                                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------------------- |
+| `npm run format`           | Apply Prettier formatting; review the resulting diff.                                          |
+| `npm run format:check`     | Report formatting differences without writing files.                                           |
+| `npm run lint`             | Check source, tests, and JavaScript configuration. Generated output and `.local/` are ignored. |
+| `npm run test:integration` | Run only the two PostgreSQL suites; a test URL is mandatory.                                   |
+| `npm run test:ci`          | Run all backend suites, require PostgreSQL, and generate reports.                              |
+| `npm run check`            | Formatting, lint, types, normal tests, and build.                                              |
+| `npm run check:ci`         | Formatting, lint, types, all tests with required PostgreSQL, and build.                        |
 
-Reports are written to `server/test-results/jest/junit.xml`; HTML coverage is at
-`server/coverage/lcov-report/index.html`. These generated directories are ignored by Git.
+## Protect main
 
-## Backend coverage
+Workflow files run checks; GitHub branch protection makes them mandatory. A repository
+administrator must configure this separately. The connected GitHub integration may have
+code/PR access without the Administration permission needed for branch rules.
 
-- `app.test.ts`: public API responses, demo rankings and goal counts, JSON errors, and
-  failed database health checks.
-- `auth.test.ts` and `passwords.test.ts`: registration validation, login failures,
-  password limits, session cookies, origin/header checks, throttling, and error handling.
-- `auth-postgres.test.ts`: persisted accounts and sessions, duplicate registration races,
-  transaction rollback, migration integrity, expiry, and logout.
-- `fitness-postgres.test.ts`: actual SQL-backed health and fitness routes, public profile
-  fields, workout dates and types, inclusive goal dates, ranking ties and zero-workout
-  profiles, database constraints, and repeatable demo seeding.
+After the workflow successfully runs on a pull request:
 
-Each PostgreSQL suite creates a randomly named schema, applies the real schema and
-migrations there, and removes only its own schema afterward. Constraint tests modify
-fixtures in that schema. Application tables are not truncated or seeded.
+1. Open **Settings > Branches > Add classic branch protection rule** and target `main`.
+2. Enable **Require a pull request before merging**. This baseline does not require an
+   additional reviewer; add that requirement separately if the team chooses one.
+3. Enable **Require status checks to pass before merging**, select **CI quality gate**
+   from **GitHub Actions**, and enable **Require branches to be up to date before merging**.
+4. Enable **Require conversation resolution before merging** and **Do not allow bypassing
+   the above settings**, so administrators also follow the rule.
+5. Keep force pushes and branch deletion disabled, and save the rule.
+6. Verify a failing gate prevents merging and that the corrected commit satisfies it.
 
-Workout and goal write endpoints are still future work. Their current validation tests
-exercise database constraints; HTTP request and ownership tests should accompany those
-endpoints when implemented.
+An administrator with an authenticated GitHub CLI can use the checked-in
+[`main-branch-protection.json`](../.github/main-branch-protection.json). It describes the
+same baseline and binds the check to GitHub Actions (app ID 15368 on GitHub.com):
 
-## Diagnose the first failed run
+```sh
+gh api --method PUT repos/ethan787/GatorGainz/branches/main/protection --input .github/main-branch-protection.json
+gh api repos/ethan787/GatorGainz/branches/main/protection
+```
 
-- **No pipeline after a push:** verify repository access, the config path, the selected
-  branch, and the push trigger in CircleCI project settings.
-- **Missing `TEST_DATABASE_URL`:** the database-required commands deliberately fail rather
-  than reporting success with skipped suites. Keep the job-level URL in the CI config.
-- **Database connection or permission error:** check the PostgreSQL service, credentials,
-  database name, and schema creation permissions. Readiness retries end after about 30 seconds.
-- **Failed assertion:** open the Tests tab or download the JUnit artifact, then reproduce
-  locally with `npm run test:integration` or `npm run test:ci`.
-- **No reports:** a failure before Jest starts, such as dependency installation or the
-  readiness check, cannot produce a JUnit report. Inspect that failed step's log.
+Inspect existing rules and preserve stronger requirements before applying this payload.
+A `403` means the credentials lack administration access; an administrator must apply the
+rule through Settings or their own CLI. Do not put an administrator token in CI. Until
+the rule is saved, failed checks are visible but do not enforce the merge policy.
+
+## Emergency merge process
+
+Use this exception only for an urgent production incident when waiting for a failed
+check would prevent recovery. Routine feature work must pass CI.
+
+1. Keep the fix in a PR. Record the incident, exact commit, failed checks, reason a bypass
+   is necessary, manual verification, and rollback plan in its description.
+2. Obtain explicit approval from a repository administrator and record who authorized
+   it and when. Get a second maintainer's review when one is available.
+3. The administrator may temporarily permit their own bypass for that PR. Keep the
+   required check configured; do not mark failures successful or add a workflow shortcut.
+4. Immediately restore administrator enforcement after merging and verify the rule.
+   The checked-in protection payload can restore the baseline.
+5. Rerun CI on `main`. Link a follow-up issue for remaining failures, assign an owner, and
+   resolve them within 24 hours. Record restored protection and the CI outcome on the PR.
+
+An assistant or CI job must not invoke this exception automatically.
+
+## Verify or diagnose a run
+
+Open a draft PR targeting `main` and confirm all six named checks appear. For a controlled
+failure test on that branch, commit a deliberately misformatted tracked file, confirm
+`CI format:check` and `CI quality gate` fail, then remove or format the file and push again.
+Confirm the newest commit passes all checks. Do not merge the failing revision.
+
+- **No checks:** inspect the workflow YAML, repository Actions settings, and any approval
+  required for a fork's first workflow run.
+- **Formatting failure:** run `npm run format`, review the diff, and rerun `format:check`.
+- **Lint failure:** fix the reported rule. Underscore-prefixed unused callback parameters
+  are allowed. Intentional exceptions need a narrow, explained suppression, as with the
+  authentication control-character rejection regexes.
+- **Database failure:** inspect the PostgreSQL service health and test connection URL.
+- **Assertion failure:** download the reports and reproduce with `test:ci` or
+  `test:integration` against the dedicated database.
+- **Required gate stays pending:** verify its exact name/app in branch protection, ensure
+  the workflow runs for the PR, and update the branch when `main` changes.
+
+## Existing backend test coverage
+
+- `app.test.ts`: public API responses, demo rankings/goal counts, JSON errors, database health.
+- `auth.test.ts` and `passwords.test.ts`: registration, login, password limits, session
+  cookies, origin/header checks, throttling, and error handling.
+- `auth-postgres.test.ts`: persisted accounts/sessions, duplicate registration races,
+  rollback, migration integrity, expiry, and logout.
+- `fitness-postgres.test.ts`: SQL-backed fitness routes, public fields, workout dates,
+  goal boundaries, ranking ties, constraints, and repeatable seeding.
+
+Workout/goal write routes and browser interaction tests should accompany those features
+as they are implemented. Current automated behavioral coverage is focused on the backend.

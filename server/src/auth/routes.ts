@@ -57,6 +57,7 @@ function normalizedEmail(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const email = value.trim().toLowerCase();
   return email.length <= 254 &&
+    // eslint-disable-next-line no-control-regex -- User input must not contain ASCII control characters.
     !/[\u0000-\u001f\u007f]/.test(email) &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     ? email
@@ -155,6 +156,7 @@ export function createAuthRouter(options: AuthOptions = {}) {
     if (
       !fullName ||
       Array.from(fullName).length > 80 ||
+      // eslint-disable-next-line no-control-regex -- User input must not contain ASCII control characters.
       /[\u0000-\u001f\u007f]/.test(fullName) ||
       !email ||
       typeof password !== 'string' ||

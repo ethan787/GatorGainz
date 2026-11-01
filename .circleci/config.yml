@@ -23,6 +23,12 @@ jobs:
           paths:
             - ~/.npm
       - run:
+          name: Check formatting
+          command: npm run format:check
+      - run:
+          name: Lint source and configuration
+          command: npm run lint
+      - run:
           name: Check client and backend TypeScript
           command: npm run typecheck
       - run:

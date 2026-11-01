@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: CI ${{ matrix.check }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [typecheck, lint, 'format:check', build]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run ${{ matrix.check }}
+        run: npm run "${{ matrix.check }}"
+
+  tests:
+    name: CI tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: gatorgainz
+          POSTGRES_PASSWORD: gatorgainz_ci
+          POSTGRES_DB: gatorgainz_auth_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gatorgainz -d gatorgainz_auth_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://gatorgainz:gatorgainz_ci@127.0.0.1:5432/gatorgainz_auth_test
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Test API and PostgreSQL integration
+        run: npm run test:ci
+      - name: Upload test results and coverage
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: backend-test-reports
+          path: |
+            server/test-results/
+            server/coverage/
+          retention-days: 7
+          if-no-files-found: warn
+
+  quality-gate:
+    name: CI quality gate
+    needs: [checks, tests]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every check to succeed
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+        run: |
+          echo "Static checks and build: $CHECKS_RESULT"
+          echo "API and database tests: $TESTS_RESULT"
+          if [[ "$CHECKS_RESULT" != "success" || "$TESTS_RESULT" != "success" ]]; then
+            echo "Every required job must succeed before merging."
+            exit 1
+          fi
