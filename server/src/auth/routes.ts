@@ -31,7 +31,7 @@ function sessionToken(request: Request): string | undefined {
   return /^[A-Za-z0-9_-]{43}$/.test(value) ? value : undefined;
 }
 
-function presentedTokenHash(request: Request): string | undefined {
+export function presentedTokenHash(request: Request): string | undefined {
   const token = sessionToken(request);
   return token ? hashSessionToken(token) : undefined;
 }
@@ -78,30 +78,11 @@ function canonicalOrigin(value: string): string {
   return url.origin;
 }
 
-const requireJson: RequestHandler = (request, response, next) => {
-  if (!request.is('application/json')) {
-    response.status(415).json({ error: 'Use Content-Type: application/json.' });
-    return;
-  }
-  next();
-};
-
-export function createAuthRouter(options: AuthOptions = {}) {
-  const router = Router();
-  const allowedOrigin = options.authOrigin ? canonicalOrigin(options.authOrigin) : undefined;
-  const cookieOptions: CookieOptions = {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: options.secureCookies ?? process.env.NODE_ENV === 'production',
-    path: '/',
-  };
-
-  router.use((_request, response, next) => {
-    response.set('Cache-Control', 'no-store');
-    next();
-  });
-  router.use((request, response, next) => {
-    if (request.method === 'POST') {
+/** Rejects cross-site writes: state-changing requests need the custom header and a same-origin Origin. */
+export function createRequestVerifier(authOrigin?: string): RequestHandler {
+  const allowedOrigin = authOrigin ? canonicalOrigin(authOrigin) : undefined;
+  return (request, response, next) => {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
       if (request.get('X-GatorGainz-Request') !== '1') {
         response.status(403).json({ error: 'Request verification failed.' });
         return;
@@ -119,7 +100,31 @@ export function createAuthRouter(options: AuthOptions = {}) {
       }
     }
     next();
+  };
+}
+
+export const requireJson: RequestHandler = (request, response, next) => {
+  if (!request.is('application/json')) {
+    response.status(415).json({ error: 'Use Content-Type: application/json.' });
+    return;
+  }
+  next();
+};
+
+export function createAuthRouter(options: AuthOptions = {}) {
+  const router = Router();
+  const cookieOptions: CookieOptions = {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: options.secureCookies ?? process.env.NODE_ENV === 'production',
+    path: '/',
+  };
+
+  router.use((_request, response, next) => {
+    response.set('Cache-Control', 'no-store');
+    next();
   });
+  router.use(createRequestVerifier(options.authOrigin));
 
   const store = options.authStore;
   if (!store) {
