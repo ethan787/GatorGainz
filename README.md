@@ -96,6 +96,15 @@ The existing public fitness preview endpoints remain read-only:
 | GET    | `/api/goals`    | Goals and workout counts within each goal's date range       |
 | GET    | `/api/rankings` | All-time workout totals, ranked by count then active minutes |
 
+Signed-in users can save and read their own workouts. These routes need PostgreSQL (they return 503 in demo mode), the session cookie, and on `POST` the `X-GatorGainz-Request: 1` header:
+
+| Method | Endpoint             | Request → response                                                                                  |
+| ------ | -------------------- | --------------------------------------------------------------------------------------------------- |
+| POST   | `/api/workouts`      | `{ name, category, durationMinutes, completedAt }` → 201 `{ workout }`, owned by the signed-in user |
+| GET    | `/api/workouts/mine` | Session cookie → 200, the signed-in user's workouts, newest first; 401 without a valid session      |
+
+`name` is 1–120 characters, `category` is `strength`, `cardio`, or `mobility`, `durationMinutes` is a whole number from 1 to 1440, and `completedAt` is a real `YYYY-MM-DD` date that is not in the future. Any `userId` in the body is ignored. Saved workouts count toward goals and rankings immediately.
+
 Rankings are a SQL view computed from workouts. Goals count workouts between their start and target dates, inclusive. Both calculations also work in demo mode. Public profile responses exclude emails and password hashes. Sample profiles have no password and cannot sign in. Unknown routes return a JSON 404; unexpected errors return a generic JSON 500.
 
 ## Checks and builds
