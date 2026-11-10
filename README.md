@@ -62,12 +62,16 @@ server/
   src/app.ts                     Express routes and error handling
   src/data/                      Demo and PostgreSQL data stores
   src/auth/                     Account routes, bcrypt helpers, SQL session storage
+  src/scoring/                  Exercise catalog, pure scoring function, submission service
+  src/me/                       Private /api/me routes and history query parsing
   src/database/setup.ts         Transactional migration runner
   scripts/setup-db.ts            Schema setup and optional sample-data seeding
   tests/                         Jest API and password tests
 shared/index.d.ts                Client/server API contracts
 db/                             PostgreSQL schema, versioned migrations, sample rows
 docs/authentication.md           Account implementation and code-review guide
+docs/workout-history.md          Private history contract, pagination, verification
+docs/workout-scoring.md          Scoring rules, retry safety, totals, edit/delete policy
 docs/backlog.md                  Starter tasks for Jira
 .circleci/config.yml             Install, typecheck, test, and build
 docs/ci.md                       CircleCI connection and backend validation guide
@@ -96,14 +100,20 @@ The existing public fitness preview endpoints remain read-only:
 | GET    | `/api/goals`    | Goals and workout counts within each goal's date range       |
 | GET    | `/api/rankings` | All-time workout totals, ranked by count then active minutes |
 
-Signed-in users can save and read their own workouts. These routes need PostgreSQL (they return 503 in demo mode), the session cookie, and on `POST` the `X-GatorGainz-Request: 1` header:
+Signed-in users can save, score, and read their own workouts. These routes need PostgreSQL (they return 503 in demo mode) and the session cookie; `POST`, `PUT`, and `DELETE` also need the `X-GatorGainz-Request: 1` header. None of them accept a user ID: the owner always comes from the session.
 
-| Method | Endpoint             | Request → response                                                                                  |
-| ------ | -------------------- | --------------------------------------------------------------------------------------------------- |
-| POST   | `/api/workouts`      | `{ name, category, durationMinutes, completedAt }` → 201 `{ workout }`, owned by the signed-in user |
-| GET    | `/api/workouts/mine` | Session cookie → 200, the signed-in user's workouts, newest first; 401 without a valid session      |
+| Method | Endpoint               | Request → response                                                                                                             |
+| ------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/api/workouts`        | `{ name, category, durationMinutes, completedAt, submissionKey?, exercises? }` → 201 `{ workout, award, created }`             |
+| GET    | `/api/workouts/mine`   | Session cookie → 200, the signed-in user's workouts, newest first; 401 without a valid session                                 |
+| GET    | `/api/me/workouts`     | `?limit=&start=&end=&cursor=` → 200 `{ items, pagination }`, paginated private history; see [history](docs/workout-history.md) |
+| PUT    | `/api/me/workouts/:id` | Same body as POST without `submissionKey` → 200, re-scored; 404 if not yours                                                   |
+| DELETE | `/api/me/workouts/:id` | 204; removes the workout and its award; 404 if not yours                                                                       |
+| GET    | `/api/me/points`       | 200 `{ total, awardedWorkouts, breakdown }`, the sum of your persisted awards; see [scoring](docs/workout-scoring.md)          |
 
 `name` is 1–120 characters, `category` is `strength`, `cardio`, or `mobility`, `durationMinutes` is a whole number from 1 to 1440, and `completedAt` is a real `YYYY-MM-DD` date that is not in the future. Any `userId` in the body is ignored. Saved workouts count toward goals and rankings immediately.
+
+Points are calculated only on the server from the exercise catalog in `server/src/scoring/config.ts`; client point totals are ignored. Sending `exercises` requires a `submissionKey`: retrying with the same key returns the original workout and award (200, `created: false`) instead of awarding twice, and reusing a key with different data returns 409.
 
 Rankings are a SQL view computed from workouts. Goals count workouts between their start and target dates, inclusive. Both calculations also work in demo mode. Public profile responses exclude emails and password hashes. Sample profiles have no password and cannot sign in. Unknown routes return a JSON 404; unexpected errors return a generic JSON 500.
 
