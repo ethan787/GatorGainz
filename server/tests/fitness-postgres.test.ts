@@ -183,6 +183,34 @@ describePostgres('PostgreSQL fitness API validation', () => {
     expect((await request(app).get('/api/health')).status).toBe(200);
   });
 
+  it('saves a workout for its owner, returns it in their history, and updates rankings (SCRUM-14)', async () => {
+    const store = createPostgresStore(pool);
+    const saved = await store.createWorkout(taylor, {
+      name: 'Saved through the API',
+      category: 'mobility',
+      durationMinutes: 25,
+      completedAt: '2026-10-21',
+    });
+    expect(saved).toMatchObject({
+      userId: taylor,
+      name: 'Saved through the API',
+      category: 'mobility',
+      durationMinutes: 25,
+      completedAt: '2026-10-21',
+    });
+
+    const history = await store.getUserWorkouts(taylor);
+    expect(history[0]).toEqual(saved);
+    expect(history.every((workout) => workout.userId === taylor)).toBe(true);
+    expect((await store.getUserWorkouts(jordan)).some((w) => w.id === saved.id)).toBe(false);
+
+    const rankings = (await request(app).get('/api/rankings')).body as Ranking[];
+    expect(rankings.find((entry) => entry.userId === taylor)).toMatchObject({
+      totalWorkouts: 2,
+      totalMinutes: 60,
+    });
+  });
+
   it('can reapply migrations and demo seeds without duplicating fitness records', async () => {
     expect(await initializeDatabase(pool, { seedDemo: true })).toEqual([]);
     expect((await request(app).get('/api/users')).body).toHaveLength(3);
