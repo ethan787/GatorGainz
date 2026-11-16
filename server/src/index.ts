@@ -4,6 +4,7 @@ import { createApp } from './app';
 import { demoStore } from './data/demo-store';
 import { createPostgresStore } from './data/postgres-store';
 import { createPostgresAuthStore } from './auth/store';
+import { createPostgresCommunityStore } from './community/store';
 
 const port = Number(process.env.PORT ?? 3001);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
@@ -23,6 +24,7 @@ if (process.env.NODE_ENV === 'production' && !process.env.AUTH_ORIGIN?.startsWit
 pool?.on('error', (error) => console.error('PostgreSQL connection error:', error.message));
 const server = createApp(store, {
   authStore: pool ? createPostgresAuthStore(pool) : undefined,
+  communityStore: pool ? createPostgresCommunityStore(pool) : undefined,
   authOrigin: process.env.AUTH_ORIGIN,
   secureCookies: process.env.NODE_ENV === 'production',
 }).listen(port, '127.0.0.1', () => {
