@@ -71,11 +71,21 @@ describe('read-only fitness API', () => {
     ]);
   });
 
-  it('returns JSON for unknown routes and unimplemented writes', async () => {
-    expect((await request(app).get('/api/missing')).status).toBe(404);
-    const response = await request(app).post('/api/workouts').send({ name: 'New workout' });
+  it('returns JSON for unknown routes', async () => {
+    const response = await request(app).get('/api/missing');
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: 'Route not found.' });
+  });
+
+  it('refuses workout writes in demo mode without exposing internals', async () => {
+    const response = await request(app)
+      .post('/api/workouts')
+      .set('X-GatorGainz-Request', '1')
+      .send({ name: 'New workout' });
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      error: 'Workout saving is unavailable. Configure PostgreSQL first.',
+    });
   });
 
   it('reports database errors without exposing internal details', async () => {

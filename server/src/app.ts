@@ -1,6 +1,8 @@
 import express, { type ErrorRequestHandler } from 'express';
 import type { FitnessStore } from './types';
 import { createAuthRouter, type AuthOptions } from './auth/routes';
+import { createWorkoutRouter } from './workouts/routes';
+import { createMeRouter } from './me/routes';
 
 export function createApp(store: FitnessStore, options: AuthOptions = {}) {
   const app = express();
@@ -18,6 +20,16 @@ export function createApp(store: FitnessStore, options: AuthOptions = {}) {
   });
   app.get('/api/users', async (_request, response) => response.json(await store.getUsers()));
   app.get('/api/workouts', async (_request, response) => response.json(await store.getWorkouts()));
+  // Mounted after the public list so GET /api/workouts keeps working without a database.
+  app.use(
+    '/api/workouts',
+    createWorkoutRouter(store, { authStore: options.authStore, authOrigin: options.authOrigin }),
+  );
+  // Private account data. Kept apart from the public preview endpoints above and below.
+  app.use(
+    '/api/me',
+    createMeRouter(store, { authStore: options.authStore, authOrigin: options.authOrigin }),
+  );
   app.get('/api/goals', async (_request, response) => response.json(await store.getGoals()));
   app.get('/api/rankings', async (_request, response) => response.json(await store.getRankings()));
 
