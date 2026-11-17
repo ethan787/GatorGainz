@@ -3,8 +3,16 @@ import type { FitnessStore } from './types';
 import { createAuthRouter, type AuthOptions } from './auth/routes';
 import { createWorkoutRouter } from './workouts/routes';
 import { createMeRouter } from './me/routes';
+import { createCommunityRouter, createInviteRouter } from './community/routes';
+import type { CommunityStore } from './community/store';
 
-export function createApp(store: FitnessStore, options: AuthOptions = {}) {
+export interface AppOptions extends AuthOptions {
+  /** Profiles, connections, and leaderboards. PostgreSQL only; absent in demo mode. */
+  communityStore?: CommunityStore;
+  invitePreviewMax?: number;
+}
+
+export function createApp(store: FitnessStore, options: AppOptions = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use('/api/auth', (_request, response, next) => {
@@ -12,7 +20,13 @@ export function createApp(store: FitnessStore, options: AuthOptions = {}) {
     next();
   });
   app.use(express.json({ limit: '16kb' }));
-  app.use('/api/auth', createAuthRouter(options));
+  app.use(
+    '/api/auth',
+    createAuthRouter({
+      ...options,
+      onRegistered: options.onRegistered ?? options.communityStore?.ensureProfile,
+    }),
+  );
 
   app.get('/api/health', async (_request, response) => {
     await store.checkConnection();
@@ -28,8 +42,20 @@ export function createApp(store: FitnessStore, options: AuthOptions = {}) {
   // Private account data. Kept apart from the public preview endpoints above and below.
   app.use(
     '/api/me',
-    createMeRouter(store, { authStore: options.authStore, authOrigin: options.authOrigin }),
+    createMeRouter(store, {
+      authStore: options.authStore,
+      authOrigin: options.authOrigin,
+      community: options.communityStore,
+    }),
   );
+  const communityOptions = {
+    community: options.communityStore,
+    authStore: options.authStore,
+    authOrigin: options.authOrigin,
+    invitePreviewMax: options.invitePreviewMax,
+  };
+  app.use('/api/community', createCommunityRouter(communityOptions));
+  app.use('/api/invites', createInviteRouter(communityOptions));
   app.get('/api/goals', async (_request, response) => response.json(await store.getGoals()));
   app.get('/api/rankings', async (_request, response) => response.json(await store.getRankings()));
 

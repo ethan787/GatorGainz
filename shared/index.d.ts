@@ -161,3 +161,170 @@ export interface HealthResponse {
   status: 'ok';
   dataSource: 'demo' | 'postgres';
 }
+
+// ---- Profiles ----
+
+export type PrimaryGoal =
+  | 'build_strength'
+  | 'lose_weight'
+  | 'improve_endurance'
+  | 'stay_active'
+  | 'improve_mobility';
+export type TrainingLevel = 'beginner' | 'intermediate' | 'advanced';
+export type PreferredUnits = 'imperial' | 'metric';
+/** public: findable and on the global leaderboard. private: only connections see you. */
+export type ProfileVisibility = 'public' | 'private';
+
+/** The signed-in user's own profile. `email` is never shown to other users. */
+export interface Profile {
+  userId: string;
+  fullName: string;
+  email: string;
+  handle: string;
+  bio: string;
+  primaryGoal: PrimaryGoal;
+  trainingLevel: TrainingLevel;
+  preferredUnits: PreferredUnits;
+  /** Workouts per week the user is aiming for, 1–14. */
+  weeklyGoal: number;
+  visibility: ProfileVisibility;
+  joinedAt: string;
+}
+
+/** Body for PATCH /api/me/profile. Send only the fields to change. */
+export type UpdateProfileRequest = Partial<
+  Pick<
+    Profile,
+    | 'fullName'
+    | 'handle'
+    | 'bio'
+    | 'primaryGoal'
+    | 'trainingLevel'
+    | 'preferredUnits'
+    | 'weeklyGoal'
+    | 'visibility'
+  >
+>;
+
+export interface Level {
+  level: number;
+  pointsIntoLevel: number;
+  pointsPerLevel: number;
+}
+
+export interface DailyActivity {
+  date: string;
+  workouts: number;
+  points: number;
+}
+
+/** Every number is computed from persisted workouts and awards. */
+export interface ProfileStats {
+  totalPoints: number;
+  totalWorkouts: number;
+  scoredWorkouts: number;
+  totalMinutes: number;
+  currentStreakDays: number;
+  longestStreakDays: number;
+  thisWeek: { workouts: number; points: number; minutes: number; goal: number };
+  /** Oldest to newest, ending today. */
+  last7Days: DailyActivity[];
+  bestWorkout: { name: string; points: number; completedAt: string } | null;
+  favoriteCategory: Workout['category'] | null;
+  level: Level;
+  /** All-time rank among public profiles; null for private profiles. */
+  globalRank: number | null;
+}
+
+export interface Badge {
+  id: string;
+  title: string;
+  detail: string;
+  earned: boolean;
+}
+
+/** GET /api/me/profile and the PATCH response. */
+export interface ProfileResponse {
+  profile: Profile;
+  stats: ProfileStats;
+  badges: Badge[];
+  connectionCount: number;
+}
+
+// ---- Community ----
+
+export type ConnectionState = 'none' | 'outgoing' | 'incoming' | 'connected';
+
+/** What other users may see about an account: never email, bio of private users, or IDs of strangers' workouts. */
+export interface PersonCard {
+  userId: string;
+  fullName: string;
+  handle: string;
+  totalPoints: number;
+  level: number;
+  connection: ConnectionState;
+}
+
+export interface PeopleSearchResponse {
+  people: PersonCard[];
+}
+
+export interface ConnectionsResponse {
+  connected: PersonCard[];
+  incoming: PersonCard[];
+  outgoing: PersonCard[];
+}
+
+/** Body for POST /api/me/connections: one of `handle` or `inviteCode`. */
+export interface ConnectionRequest {
+  handle?: string;
+  inviteCode?: string;
+}
+
+export interface ConnectionResponse {
+  person: PersonCard;
+}
+
+export interface BlockedUser {
+  userId: string;
+  fullName: string;
+  handle: string;
+}
+
+export type LeaderboardScope = 'global' | 'connections';
+export type LeaderboardRange = 'week' | 'month' | 'all';
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  fullName: string;
+  handle: string;
+  points: number;
+  isYou: boolean;
+  connection: ConnectionState;
+}
+
+/** GET /api/community/leaderboard */
+export interface LeaderboardResponse {
+  scope: LeaderboardScope;
+  range: LeaderboardRange;
+  /** First counted date (inclusive), or null for all time. */
+  since: string | null;
+  entries: LeaderboardEntry[];
+  /** Always present, even when outside the top entries. */
+  you: LeaderboardEntry;
+  /** Points earned in the range by everyone counted on this board. */
+  boardPoints: number;
+  members: number;
+}
+
+/** GET/POST /api/me/invite. The client builds the link: `${origin}/?invite=${inviteCode}`. */
+export interface InviteResponse {
+  inviteCode: string;
+}
+
+/** GET /api/invites/:code, shown before connecting. */
+export interface InvitePreview {
+  fullName: string;
+  handle: string;
+}

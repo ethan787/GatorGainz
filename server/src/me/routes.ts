@@ -11,10 +11,13 @@ import { createRequireUser } from '../auth/require-user';
 import { buildUpdate } from '../scoring/service';
 import type { FitnessStore } from '../types';
 import { encodeCursor, parseHistoryQuery } from './history-query';
+import { createMeCommunityRouter } from '../community/routes';
+import type { CommunityStore } from '../community/store';
 
 export interface MeRouteOptions {
   authStore?: AuthStore;
   authOrigin?: string;
+  community?: CommunityStore;
 }
 
 /**
@@ -96,6 +99,9 @@ export function createMeRouter(store: FitnessStore, options: MeRouteOptions = {}
   router.get('/points', async (_request, response) => {
     response.json((await store.getUserPoints(owner(response.locals))) satisfies PointsResponse);
   });
+
+  // Profile, connections, blocks, and invite link.
+  if (options.community) router.use(createMeCommunityRouter(options.community));
 
   return router;
 }
