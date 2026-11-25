@@ -12,6 +12,7 @@ import type {
 } from "@gatorgainz/types";
 import { api, errorMessage, inviteLink, shareInvite } from "./api";
 import { Button, Card, getInitials, Icon, Label, PageTitle } from "./ui";
+import { Sheet } from "./history";
 
 const tones = ["coral", "blue", "purple", "green", "yellow"];
 
@@ -70,7 +71,87 @@ function ConnectButton({ person, onChanged }: { person: Person; onChanged: () =>
   );
 }
 
-function PeopleSearch({ onChanged, refreshKey }: { onChanged: () => void; refreshKey: number }) {
+/** A person's public card with every action in one place. */
+function PersonSheet({ userId, onClose, onChanged }: { userId: string; onClose: () => void; onChanged: () => void }) {
+  const [person, setPerson] = useState<PersonCard | null>(null);
+  const [error, setError] = useState("");
+  const [confirmBlock, setConfirmBlock] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  const load = useCallback(() => {
+    api.person(userId).then((result) => setPerson(result.person)).catch((failure) => setError(errorMessage(failure)));
+  }, [userId]);
+  useEffect(load, [load]);
+
+  async function run(action: () => Promise<unknown>, after?: string) {
+    setError("");
+    try {
+      await action();
+      onChanged();
+      if (after) {
+        setNotice(after);
+        setPerson(null);
+      } else load();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    }
+  }
+
+  const levelPoints = person ? person.totalPoints % 500 : 0;
+  return (
+    <Sheet title="Profile" onClose={onClose}>
+      {notice && <p className="invite-status" role="status">{notice}</p>}
+      {error && !notice && <p className="auth-message" role="alert">{error}</p>}
+      {!person && !error && !notice && <p className="empty-message">Loading profile...</p>}
+      {person && (
+        <div className="person-sheet">
+          <div className="person-sheet-head">
+            <div className={`avatar avatar-${toneFor(person.userId)} avatar-large`}>{getInitials(person.fullName)}</div>
+            <div>
+              <div className="section-title">{person.fullName}</div>
+              <span className="muted">@{person.handle}</span>
+            </div>
+          </div>
+          <div className="person-stats">
+            <div><Label>Level</Label><strong>{person.level}</strong></div>
+            <div><Label>Total points</Label><strong>{person.totalPoints.toLocaleString()}</strong></div>
+            <div><Label>Status</Label><strong>{{ none: "Not connected", outgoing: "Request sent", incoming: "Wants to connect", connected: "Connected" }[person.connection]}</strong></div>
+          </div>
+          <div className="profile-progress" aria-label={`${levelPoints} of 500 points to the next level`}><span style={{ width: `${Math.round((levelPoints / 500) * 100)}%` }} /></div>
+          <p className="board-note">You see only their name, username, level, and points. Their email and workouts stay private.</p>
+          <div className="form-actions">
+            {person.connection === "none" && <Button className="primary-button" onClick={() => run(() => api.connectByHandle(person.handle))}>Connect</Button>}
+            {person.connection === "incoming" && <>
+              <Button className="secondary-button" onClick={() => run(() => api.removeConnection(person.userId))}>Decline</Button>
+              <Button className="primary-button" onClick={() => run(() => api.acceptConnection(person.userId))}>Accept</Button>
+            </>}
+            {person.connection === "outgoing" && <Button className="secondary-button" onClick={() => run(() => api.removeConnection(person.userId))}>Cancel request</Button>}
+            {person.connection === "connected" && <Button className="secondary-button" onClick={() => run(() => api.removeConnection(person.userId))}>Remove connection</Button>}
+          </div>
+          <div className="sheet-danger">
+            {confirmBlock
+              ? <><span>Block {person.fullName}? You will be hidden from each other and any connection is removed.</span>
+                  <Button className="mini-text-button" onClick={() => setConfirmBlock(false)}>Cancel</Button>
+                  <Button className="mini-text-button danger" onClick={() => run(() => api.block(person.userId), `${person.fullName} is blocked. Unblock them any time from Account.`)}>Block</Button></>
+              : <Button className="mini-text-button" onClick={() => setConfirmBlock(true)}><Icon name="shield" size={12} /> Block</Button>}
+          </div>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+/** Name and avatar that open the profile sheet. */
+function PersonLink({ person, onOpen, suffix }: { person: Pick<PersonCard, "userId" | "fullName" | "handle">; onOpen: (userId: string) => void; suffix?: string }) {
+  return (
+    <button type="button" className="person-link" onClick={() => onOpen(person.userId)} aria-label={`View ${person.fullName}'s profile`}>
+      <Avatar userId={person.userId} name={person.fullName} />
+      <div className="leader-copy"><strong>{person.fullName}</strong><span>@{person.handle}{suffix ? ` · ${suffix}` : ""}</span></div>
+    </button>
+  );
+}
+
+function PeopleSearch({ onChanged, refreshKey, onOpen }: { onChanged: () => void; refreshKey: number; onOpen: (userId: string) => void }) {
   const [query, setQuery] = useState("");
   const [people, setPeople] = useState<PersonCard[]>([]);
   const [status, setStatus] = useState("Type at least 2 letters of a name or username.");
@@ -112,8 +193,7 @@ function PeopleSearch({ onChanged, refreshKey }: { onChanged: () => void; refres
       <div className="people-results" aria-live="polite">
         {people.map((person) => (
           <div className="person-chip" key={person.userId}>
-            <Avatar userId={person.userId} name={person.fullName} />
-            <div className="leader-copy"><strong>{person.fullName}</strong><span>@{person.handle} · {person.totalPoints.toLocaleString()} pts</span></div>
+            <PersonLink person={person} onOpen={onOpen} suffix={`${person.totalPoints.toLocaleString()} pts`} />
             <ConnectButton person={person} onChanged={onChanged} />
           </div>
         ))}
@@ -123,7 +203,7 @@ function PeopleSearch({ onChanged, refreshKey }: { onChanged: () => void; refres
   );
 }
 
-function Leaderboard({ refreshKey, onChanged }: { refreshKey: number; onChanged: () => void }) {
+function Leaderboard({ refreshKey, onChanged, onOpen }: { refreshKey: number; onChanged: () => void; onOpen: (userId: string) => void }) {
   const [scope, setScope] = useState<LeaderboardScope>("global");
   const [range, setRange] = useState<LeaderboardRange>("week");
   const [board, setBoard] = useState<LeaderboardResponse | null>(null);
@@ -143,8 +223,9 @@ function Leaderboard({ refreshKey, onChanged }: { refreshKey: number; onChanged:
   const row = (entry: LeaderboardEntry) => (
     <div className={`leader-row ${entry.rank === 1 && entry.points > 0 ? "winner" : ""} ${entry.isYou ? "is-you" : ""}`} key={entry.userId}>
       <div className={`rank rank-${Math.min(entry.rank, 4)}`}>{entry.rank}</div>
-      <Avatar userId={entry.userId} name={entry.fullName} />
-      <div className="leader-copy"><strong>{entry.isYou ? `${entry.fullName} (you)` : entry.fullName}</strong><span>@{entry.handle}</span></div>
+      {entry.isYou
+        ? <><Avatar userId={entry.userId} name={entry.fullName} /><div className="leader-copy"><strong>{entry.fullName} (you)</strong><span>@{entry.handle}</span></div></>
+        : <PersonLink person={entry} onOpen={onOpen} />}
       <div className="leader-score"><Icon name="bolt" size={14} /><strong>{entry.points.toLocaleString()}</strong><span>pts</span></div>
       {entry.isYou ? <span className="follow-button placeholder" aria-hidden="true" /> : <ConnectButton person={entry} onChanged={onChanged} />}
     </div>
@@ -180,7 +261,7 @@ function Leaderboard({ refreshKey, onChanged }: { refreshKey: number; onChanged:
   );
 }
 
-function ConnectionsCard({ connections, onChanged }: { connections: ConnectionsResponse | null; onChanged: () => void }) {
+function ConnectionsCard({ connections, onChanged, onOpen }: { connections: ConnectionsResponse | null; onChanged: () => void; onOpen: (userId: string) => void }) {
   const [confirmBlock, setConfirmBlock] = useState<string | null>(null);
   const [error, setError] = useState("");
   async function run(action: () => Promise<unknown>) {
@@ -207,8 +288,7 @@ function ConnectionsCard({ connections, onChanged }: { connections: ConnectionsR
           <Label>Requests for you</Label>
           {incoming.map((person) => (
             <div className="connection-row" key={person.userId}>
-              <Avatar userId={person.userId} name={person.fullName} />
-              <div className="leader-copy"><strong>{person.fullName}</strong><span>@{person.handle}</span></div>
+              <PersonLink person={person} onOpen={onOpen} />
               <div className="row-actions">
                 <Button className="follow-button" onClick={() => run(() => api.acceptConnection(person.userId))}>Accept</Button>
                 <Button className="mini-text-button" label={`Decline ${person.fullName}`} onClick={() => run(() => api.removeConnection(person.userId))}>Decline</Button>
@@ -221,8 +301,7 @@ function ConnectionsCard({ connections, onChanged }: { connections: ConnectionsR
         {connected.length === 0 && <p className="empty-message">No connections yet. Search for people or share your invite link.</p>}
         {connected.map((person) => (
           <div className="connection-row" key={person.userId}>
-            <Avatar userId={person.userId} name={person.fullName} />
-            <div className="leader-copy"><strong>{person.fullName}</strong><span>@{person.handle} · {person.totalPoints.toLocaleString()} pts · Lvl {person.level}</span></div>
+            <PersonLink person={person} onOpen={onOpen} suffix={`${person.totalPoints.toLocaleString()} pts · Lvl ${person.level}`} />
             <div className="row-actions">
               <Button className="mini-text-button" label={`Remove ${person.fullName}`} onClick={() => run(() => api.removeConnection(person.userId))}>Remove</Button>
               {confirmBlock === person.userId
@@ -237,8 +316,7 @@ function ConnectionsCard({ connections, onChanged }: { connections: ConnectionsR
           <Label>Waiting for them</Label>
           {outgoing.map((person) => (
             <div className="connection-row" key={person.userId}>
-              <Avatar userId={person.userId} name={person.fullName} />
-              <div className="leader-copy"><strong>{person.fullName}</strong><span>@{person.handle}</span></div>
+              <PersonLink person={person} onOpen={onOpen} />
               <Button className="mini-text-button" onClick={() => run(() => api.removeConnection(person.userId))}>Cancel</Button>
             </div>
           ))}
@@ -328,6 +406,7 @@ export function Community({
 }) {
   const [showPeople, setShowPeople] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [openPerson, setOpenPerson] = useState<string | null>(null);
   const [banner, setBanner] = useState<LeaderboardResponse | null>(null);
   const changed = useCallback(() => {
     setRefreshKey((key) => key + 1);
@@ -348,7 +427,7 @@ export function Community({
         <PageTitle subtitle="Train together, climb the ranks, and celebrate every win.">Community</PageTitle>
         <Button className="primary-button" onClick={() => setShowPeople((visible) => !visible)}><Icon name="users" size={18} /> {showPeople ? "Close search" : "Find people"}</Button>
       </div>
-      {showPeople && <PeopleSearch onChanged={changed} refreshKey={refreshKey} />}
+      {showPeople && <PeopleSearch onChanged={changed} refreshKey={refreshKey} onOpen={setOpenPerson} />}
       <div className="community-banner">
         <div>
           <Label>Last 30 days</Label>
@@ -361,12 +440,13 @@ export function Community({
         </div>
       </div>
       <div className="community-grid">
-        <Leaderboard refreshKey={refreshKey} onChanged={changed} />
+        <Leaderboard refreshKey={refreshKey} onChanged={changed} onOpen={setOpenPerson} />
         <div className="community-side">
-          <ConnectionsCard connections={connections} onChanged={changed} />
+          <ConnectionsCard connections={connections} onChanged={changed} onOpen={setOpenPerson} />
           <InviteCard user={user} />
         </div>
       </div>
+      {openPerson && <PersonSheet userId={openPerson} onClose={() => setOpenPerson(null)} onChanged={changed} />}
     </div>
   );
 }

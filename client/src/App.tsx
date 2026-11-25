@@ -6,28 +6,15 @@ import { Button, Card, getInitials, Icon, Label, PageTitle, StatCard, type IconN
 import { api, ApiError, clearPendingInvite, errorMessage, localDate, pendingInvite } from "./api";
 import { Avatar, Community } from "./community";
 import { formatMinutes, Profile } from "./profile";
+import { workouts, type Workout } from "./catalog";
+import { WorkoutHistory } from "./history";
+import { Onboarding } from "./onboarding";
 
-type Tab = "home" | "log" | "community" | "profile";
+type Tab = "home" | "log" | "community" | "profile" | "history";
 type Theme = "light" | "dark";
 type AuthMode = "login" | "register";
 type UserAccount = AuthUser;
 
-type Workout = {
-  name: string;
-  group: string;
-  difficulty: "Easy" | "Medium" | "Hard";
-  points: number;
-  tracking?: "strength" | "cardio";
-  cardioMetric?: {
-    label: string;
-    unit: string;
-    min: number;
-    max: number;
-    step: number;
-    initial: number;
-    baseline: number;
-  };
-};
 
 type SessionExercise = Workout & {
   id: string;
@@ -38,90 +25,6 @@ type SessionExercise = Workout & {
   earned: number;
 };
 
-const workouts: Workout[] = [
-  { name: "Lat pull-down", group: "Back", difficulty: "Medium", points: 18 },
-  { name: "Barbell bench press", group: "Chest", difficulty: "Hard", points: 24 },
-  { name: "Back squat", group: "Legs", difficulty: "Hard", points: 28 },
-  { name: "Deadlift", group: "Full body", difficulty: "Hard", points: 32 },
-  { name: "Seated cable row", group: "Back", difficulty: "Medium", points: 18 },
-  { name: "Dumbbell shoulder press", group: "Shoulders", difficulty: "Medium", points: 20 },
-  { name: "Leg press", group: "Legs", difficulty: "Medium", points: 20 },
-  { name: "Incline dumbbell press", group: "Chest", difficulty: "Medium", points: 20 },
-  { name: "Pull-ups", group: "Back", difficulty: "Hard", points: 26 },
-  { name: "Romanian deadlift", group: "Legs", difficulty: "Hard", points: 26 },
-  { name: "Bicep curls", group: "Arms", difficulty: "Easy", points: 12 },
-  { name: "Tricep pushdown", group: "Arms", difficulty: "Easy", points: 12 },
-  { name: "Lateral raises", group: "Shoulders", difficulty: "Easy", points: 12 },
-  { name: "Walking lunges", group: "Legs", difficulty: "Medium", points: 18 },
-  { name: "Plank hold", group: "Core", difficulty: "Medium", points: 16 },
-  { name: "Hanging leg raises", group: "Core", difficulty: "Hard", points: 22 },
-  { name: "Chest-supported row", group: "Back", difficulty: "Medium", points: 19 },
-  { name: "Single-arm dumbbell row", group: "Back", difficulty: "Medium", points: 18 },
-  { name: "Face pulls", group: "Back", difficulty: "Easy", points: 12 },
-  { name: "Push-ups", group: "Chest", difficulty: "Easy", points: 13 },
-  { name: "Cable chest fly", group: "Chest", difficulty: "Medium", points: 17 },
-  { name: "Dumbbell floor press", group: "Chest", difficulty: "Medium", points: 18 },
-  { name: "Bulgarian split squat", group: "Legs", difficulty: "Hard", points: 27 },
-  { name: "Leg extension", group: "Legs", difficulty: "Easy", points: 13 },
-  { name: "Seated hamstring curl", group: "Legs", difficulty: "Medium", points: 16 },
-  { name: "Standing calf raise", group: "Legs", difficulty: "Easy", points: 11 },
-  { name: "Hammer curls", group: "Arms", difficulty: "Medium", points: 15 },
-  { name: "Skull crushers", group: "Arms", difficulty: "Medium", points: 17 },
-  { name: "Dips", group: "Arms", difficulty: "Hard", points: 23 },
-  { name: "Arnold press", group: "Shoulders", difficulty: "Hard", points: 23 },
-  { name: "Rear delt fly", group: "Shoulders", difficulty: "Easy", points: 13 },
-  { name: "Cable woodchop", group: "Core", difficulty: "Medium", points: 17 },
-  { name: "Ab wheel rollout", group: "Core", difficulty: "Hard", points: 24 },
-  { name: "Russian twists", group: "Core", difficulty: "Easy", points: 12 },
-  { name: "Kettlebell swings", group: "Full body", difficulty: "Hard", points: 27 },
-  { name: "Clean and press", group: "Full body", difficulty: "Hard", points: 31 },
-  { name: "Farmer carry", group: "Full body", difficulty: "Medium", points: 21 },
-  { name: "Incline barbell press", group: "Chest", difficulty: "Hard", points: 24 },
-  { name: "Decline bench press", group: "Chest", difficulty: "Medium", points: 20 },
-  { name: "Pec deck fly", group: "Chest", difficulty: "Easy", points: 14 },
-  { name: "Low-to-high cable fly", group: "Chest", difficulty: "Medium", points: 18 },
-  { name: "T-bar row", group: "Back", difficulty: "Hard", points: 24 },
-  { name: "Straight-arm pull-down", group: "Back", difficulty: "Medium", points: 17 },
-  { name: "Barbell shrugs", group: "Back", difficulty: "Medium", points: 18 },
-  { name: "Back extensions", group: "Back", difficulty: "Easy", points: 14 },
-  { name: "Reverse pec deck", group: "Back", difficulty: "Medium", points: 17 },
-  { name: "Front raises", group: "Shoulders", difficulty: "Easy", points: 12 },
-  { name: "Cable lateral raises", group: "Shoulders", difficulty: "Medium", points: 15 },
-  { name: "Upright row", group: "Shoulders", difficulty: "Medium", points: 17 },
-  { name: "Preacher curls", group: "Arms", difficulty: "Medium", points: 16 },
-  { name: "Incline dumbbell curls", group: "Arms", difficulty: "Medium", points: 16 },
-  { name: "Concentration curls", group: "Arms", difficulty: "Easy", points: 13 },
-  { name: "Overhead tricep extension", group: "Arms", difficulty: "Medium", points: 17 },
-  { name: "Close-grip bench press", group: "Arms", difficulty: "Hard", points: 22 },
-  { name: "Wrist curls", group: "Arms", difficulty: "Easy", points: 10 },
-  { name: "Reverse wrist curls", group: "Arms", difficulty: "Easy", points: 10 },
-  { name: "Cable crunches", group: "Core", difficulty: "Medium", points: 16 },
-  { name: "Side plank", group: "Core", difficulty: "Medium", points: 15 },
-  { name: "Pallof press", group: "Core", difficulty: "Medium", points: 16 },
-  { name: "Bicycle crunches", group: "Core", difficulty: "Easy", points: 12 },
-  { name: "Hip thrust", group: "Legs", difficulty: "Hard", points: 25 },
-  { name: "Glute bridge", group: "Legs", difficulty: "Easy", points: 13 },
-  { name: "Front squat", group: "Legs", difficulty: "Hard", points: 27 },
-  { name: "Hack squat", group: "Legs", difficulty: "Hard", points: 25 },
-  { name: "Lying leg curl", group: "Legs", difficulty: "Medium", points: 16 },
-  { name: "Hip adduction", group: "Legs", difficulty: "Easy", points: 12 },
-  { name: "Hip abduction", group: "Legs", difficulty: "Easy", points: 12 },
-  { name: "Donkey calf raise", group: "Legs", difficulty: "Medium", points: 15 },
-  { name: "Tibialis raise", group: "Legs", difficulty: "Easy", points: 10 },
-  { name: "Sled push", group: "Full body", difficulty: "Hard", points: 29 },
-  { name: "Dumbbell thrusters", group: "Full body", difficulty: "Hard", points: 28 },
-  { name: "Outdoor run", group: "Cardio", difficulty: "Medium", points: 22, tracking: "cardio", cardioMetric: { label: "Miles run", unit: "mi", min: 1, max: 30, step: 1, initial: 3, baseline: 3 } },
-  { name: "Treadmill run", group: "Cardio", difficulty: "Medium", points: 20, tracking: "cardio", cardioMetric: { label: "Miles run", unit: "mi", min: 1, max: 30, step: 1, initial: 3, baseline: 3 } },
-  { name: "Stadium stairs", group: "Cardio", difficulty: "Hard", points: 26, tracking: "cardio", cardioMetric: { label: "Stairs climbed", unit: "steps", min: 50, max: 5000, step: 50, initial: 500, baseline: 500 } },
-  { name: "Stair climber", group: "Cardio", difficulty: "Medium", points: 18, tracking: "cardio", cardioMetric: { label: "Floors climbed", unit: "floors", min: 5, max: 300, step: 5, initial: 30, baseline: 30 } },
-  { name: "Cycling", group: "Cardio", difficulty: "Medium", points: 19, tracking: "cardio", cardioMetric: { label: "Miles ridden", unit: "mi", min: 1, max: 100, step: 1, initial: 8, baseline: 8 } },
-  { name: "Swimming laps", group: "Cardio", difficulty: "Hard", points: 25, tracking: "cardio", cardioMetric: { label: "Laps completed", unit: "laps", min: 5, max: 300, step: 5, initial: 20, baseline: 20 } },
-  { name: "Rowing machine", group: "Cardio", difficulty: "Medium", points: 19, tracking: "cardio", cardioMetric: { label: "Meters rowed", unit: "m", min: 250, max: 20000, step: 250, initial: 2000, baseline: 2000 } },
-  { name: "Elliptical", group: "Cardio", difficulty: "Easy", points: 14, tracking: "cardio", cardioMetric: { label: "Miles completed", unit: "mi", min: 1, max: 30, step: 1, initial: 3, baseline: 3 } },
-  { name: "Brisk walk", group: "Cardio", difficulty: "Easy", points: 11, tracking: "cardio", cardioMetric: { label: "Miles walked", unit: "mi", min: 1, max: 30, step: 1, initial: 2, baseline: 2 } },
-  { name: "Jump rope", group: "Cardio", difficulty: "Easy", points: 14, tracking: "cardio", cardioMetric: { label: "Jumps completed", unit: "jumps", min: 50, max: 5000, step: 50, initial: 500, baseline: 500 } },
-  { name: "Burpees", group: "Cardio", difficulty: "Hard", points: 25 },
-];
 
 function getFirstName(name: string) {
   return name.trim().split(/\s+/)[0] || "Gator";
@@ -395,7 +298,7 @@ function ChallengeCard({ profile, goLog }: { profile: ProfileResponse | null; go
   );
 }
 
-function RecentActivity({ refreshKey, goLog }: { refreshKey: number; goLog: () => void }) {
+function RecentActivity({ refreshKey, goLog, openHistory }: { refreshKey: number; goLog: () => void; openHistory: () => void }) {
   const [items, setItems] = useState<WorkoutHistoryItem[] | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -414,6 +317,7 @@ function RecentActivity({ refreshKey, goLog }: { refreshKey: number; goLog: () =
     <Card className="recent-card">
       <div className="card-head">
         <div><Label>History</Label><div className="section-title">Recent activity</div></div>
+        {items && items.length > 0 && <Button className="text-button" onClick={openHistory}>View all <Icon name="chevron" size={15} /></Button>}
       </div>
       {error && <p className="auth-message" role="alert">{error}</p>}
       <div className="activity-list">
@@ -435,7 +339,7 @@ function greeting() {
   return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 }
 
-function Dashboard({ goLog, profile, user, refreshKey }: { goLog: () => void; profile: ProfileResponse | null; user: UserAccount; refreshKey: number }) {
+function Dashboard({ goLog, openHistory, profile, user, refreshKey }: { goLog: () => void; openHistory: () => void; profile: ProfileResponse | null; user: UserAccount; refreshKey: number }) {
   const stats = profile?.stats;
   const value = (number: number | undefined) => (number === undefined ? "—" : number.toLocaleString());
   return (
@@ -455,7 +359,7 @@ function Dashboard({ goLog, profile, user, refreshKey }: { goLog: () => void; pr
           <ChallengeCard profile={profile} goLog={goLog} />
           <WeeklyChart profile={profile} />
         </div>
-        <RecentActivity refreshKey={refreshKey} goLog={goLog} />
+        <RecentActivity refreshKey={refreshKey} goLog={goLog} openHistory={openHistory} />
       </div>
     </div>
   );
@@ -960,7 +864,7 @@ function InvitePrompt({ onDone }: { onDone: () => void }) {
   );
 }
 
-function AuthenticatedApp({ currentUser, setCurrentUser, theme, setTheme, onLogout }: { currentUser: UserAccount; setCurrentUser: (user: UserAccount) => void; theme: Theme; setTheme: (theme: Theme) => void; onLogout: () => Promise<void> }) {
+function AuthenticatedApp({ currentUser, setCurrentUser, theme, setTheme, onLogout, onSignedOut }: { currentUser: UserAccount; setCurrentUser: (user: UserAccount) => void; theme: Theme; setTheme: (theme: Theme) => void; onLogout: () => Promise<void>; onSignedOut: () => void }) {
   const [tab, setTab] = useState<Tab>("home");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
@@ -969,7 +873,7 @@ function AuthenticatedApp({ currentUser, setCurrentUser, theme, setTheme, onLogo
   const [profileError, setProfileError] = useState("");
   const [connections, setConnections] = useState<ConnectionsResponse | null>(null);
   const [activityKey, setActivityKey] = useState(0);
-  const titles = useMemo(() => ({ home: "Overview", log: "Log workout", community: "Community", profile: "Account" }), []);
+  const titles = useMemo(() => ({ home: "Overview", log: "Log workout", community: "Community", profile: "Account", history: "History" }), []);
 
   const loadProfile = useCallback(() => {
     setProfileError("");
@@ -1024,10 +928,15 @@ function AuthenticatedApp({ currentUser, setCurrentUser, theme, setTheme, onLogo
       <main className="main-area">
         <TopBar title={titles[tab]} points={profile?.stats.totalPoints ?? null} connections={connections} onChanged={refreshCommunity} openCommunity={() => setTab("community")} />
         <InvitePrompt onDone={refreshCommunity} />
-        {tab === "home" && <Dashboard goLog={() => setTab("log")} profile={profile} user={currentUser} refreshKey={activityKey} />}
+        {profile && !profile.profile.onboarded
+          ? <Onboarding data={profile} onDone={profileChanged} />
+          : <>
+        {tab === "home" && <Dashboard goLog={() => setTab("log")} openHistory={() => setTab("history")} profile={profile} user={currentUser} refreshKey={activityKey} />}
+        {tab === "history" && <WorkoutHistory onBack={() => setTab("home")} goLog={() => setTab("log")} onChanged={() => { setActivityKey((key) => key + 1); loadProfile(); }} />}
         {tab === "log" && <WorkoutLogger userId={currentUser.id} onSaved={workoutSaved} />}
         {tab === "community" && <Community user={currentUser} profile={profile} connections={connections} onChanged={refreshCommunity} />}
-        {tab === "profile" && <Profile data={profile} error={profileError} onRetry={loadProfile} onProfileChange={profileChanged} theme={theme} setTheme={setTheme} onLogout={logout} isLoggingOut={isLoggingOut} logoutError={logoutError} />}
+        {tab === "profile" && <Profile data={profile} error={profileError} onRetry={loadProfile} onProfileChange={profileChanged} theme={theme} setTheme={setTheme} onLogout={logout} isLoggingOut={isLoggingOut} logoutError={logoutError} onSignedOut={onSignedOut} openHistory={() => setTab("history")} />}
+          </>}
         {toast !== null && <div className="session-toast" role="status"><Icon name="bolt" size={17} /> {toast}</div>}
       </main>
     </>
@@ -1102,7 +1011,7 @@ export default function App() {
       {isCheckingSession || sessionError
         ? <SessionStatus error={sessionError} onRetry={() => setSessionAttempt((attempt) => attempt + 1)} />
         : currentUser
-          ? <AuthenticatedApp key={currentUser.id} currentUser={currentUser} setCurrentUser={setCurrentUser} theme={theme} setTheme={setTheme} onLogout={logout} />
+          ? <AuthenticatedApp key={currentUser.id} currentUser={currentUser} setCurrentUser={setCurrentUser} theme={theme} setTheme={setTheme} onLogout={logout} onSignedOut={() => setCurrentUser(null)} />
           : <AuthScreen onAuthenticated={setCurrentUser} />}
     </div>
   );

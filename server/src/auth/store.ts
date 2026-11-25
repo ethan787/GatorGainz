@@ -26,6 +26,15 @@ export interface AuthStore {
   createSession(userId: string, session: NewSession, previousTokenHash?: string): Promise<void>;
   findSessionUser(tokenHash: string): Promise<AuthUser | null>;
   revokeSession(tokenHash: string): Promise<void>;
+  /** The stored bcrypt hash, or null for accounts without a password. */
+  findPasswordHash(userId: string): Promise<string | null>;
+  /** Replaces the password and signs out every other session, atomically. */
+  changePassword(userId: string, passwordHash: string, keepTokenHash: string): Promise<void>;
+  countSessions(userId: string): Promise<number>;
+  /** Signs out every session except the current one. Returns how many were removed. */
+  revokeOtherSessions(userId: string, keepTokenHash: string): Promise<number>;
+  /** Deletes the account and, by cascade, its sessions, workouts, awards, profile, and connections. */
+  deleteAccount(userId: string): Promise<boolean>;
 }
 
 export class EmailAlreadyRegisteredError extends Error {
@@ -137,6 +146,54 @@ export function createPostgresAuthStore(pool: Pool): AuthStore {
     },
     async revokeSession(tokenHash) {
       await pool.query('DELETE FROM auth_sessions WHERE token_hash = $1', [tokenHash]);
+    },
+    async findPasswordHash(userId) {
+      const { rows } = await pool.query<{ hash: string | null }>(
+        'SELECT password_hash AS hash FROM users WHERE id = $1',
+        [userId],
+      );
+      return rows[0]?.hash ?? null;
+    },
+    async changePassword(userId, passwordHash, keepTokenHash) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('UPDATE users SET password_hash = $2 WHERE id = $1', [
+          userId,
+          passwordHash,
+        ]);
+        await client.query('DELETE FROM auth_sessions WHERE user_id = $1 AND token_hash <> $2', [
+          userId,
+          keepTokenHash,
+        ]);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async countSessions(userId) {
+      const { rows } = await pool.query<{ count: number }>(
+        'SELECT COUNT(*)::integer AS count FROM auth_sessions WHERE user_id = $1 AND expires_at > now()',
+        [userId],
+      );
+      return rows[0].count;
+    },
+    async revokeOtherSessions(userId, keepTokenHash) {
+      const result = await pool.query(
+        'DELETE FROM auth_sessions WHERE user_id = $1 AND token_hash <> $2',
+        [userId, keepTokenHash],
+      );
+      return result.rowCount ?? 0;
+    },
+    async deleteAccount(userId) {
+      const result = await pool.query(
+        'DELETE FROM users WHERE id = $1 AND password_hash IS NOT NULL',
+        [userId],
+      );
+      return result.rowCount === 1;
     },
   };
 }

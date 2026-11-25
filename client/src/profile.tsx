@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type {
   BlockedUser,
-  PreferredUnits,
   PrimaryGoal,
   ProfileResponse,
   ProfileVisibility,
@@ -9,6 +8,7 @@ import type {
   UpdateProfileRequest,
 } from "@gatorgainz/types";
 import { api, errorMessage } from "./api";
+// Units are not shown: the logger has no weight field yet, so the setting would do nothing.
 import { Button, Card, getInitials, Icon, Label, PageTitle, StatCard, type IconName } from "./ui";
 
 type Theme = "light" | "dark";
@@ -21,7 +21,6 @@ export const goalLabels: Record<PrimaryGoal, string> = {
   improve_mobility: "Improve mobility",
 };
 const levelLabels: Record<TrainingLevel, string> = { beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced" };
-const unitLabels: Record<PreferredUnits, string> = { imperial: "Imperial (lb, mi)", metric: "Metric (kg, km)" };
 const badgeIcons: Record<string, IconName> = {
   "first-workout": "check",
   "ten-workouts": "dumbbell",
@@ -49,7 +48,6 @@ function EditProfile({ data, onSaved, onCancel }: { data: ProfileResponse; onSav
     bio: profile.bio,
     primaryGoal: profile.primaryGoal,
     trainingLevel: profile.trainingLevel,
-    preferredUnits: profile.preferredUnits,
     weeklyGoal: profile.weeklyGoal,
     visibility: profile.visibility,
   });
@@ -103,11 +101,6 @@ function EditProfile({ data, onSaved, onCancel }: { data: ProfileResponse; onSav
             {Object.entries(levelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
-        <label><span>Units</span>
-          <select value={form.preferredUnits} onChange={(e) => set("preferredUnits", e.target.value as PreferredUnits)}>
-            {Object.entries(unitLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </label>
         <label><span>Weekly goal (workouts)</span>
           <input type="number" min={1} max={14} step={1} value={form.weeklyGoal} onChange={(e) => set("weeklyGoal", Math.round(Number(e.target.value)))} />
         </label>
@@ -153,6 +146,102 @@ function BlockedList() {
   );
 }
 
+function SecurityCard({ onSignedOut }: { onSignedOut: () => void }) {
+  const [sessions, setSessions] = useState<number | null>(null);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteWord, setDeleteWord] = useState("");
+
+  const loadSessions = () => api.sessions().then((result) => setSessions(result.activeSessions)).catch(() => setSessions(null));
+  useEffect(() => { void loadSessions(); }, []);
+
+  async function attempt(action: () => Promise<void>) {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await action();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const signOutOthers = () => attempt(async () => {
+    const result = await api.signOutOthers();
+    setNotice(result.revoked ? `Signed out ${result.revoked} other ${result.revoked === 1 ? "device" : "devices"}.` : "No other devices were signed in.");
+    await loadSessions();
+  });
+  const changePassword = (event: FormEvent) => {
+    event.preventDefault();
+    if (Array.from(next).length < 15) return setError("Use at least 15 characters for the new password.");
+    if (new TextEncoder().encode(next).length > 72) return setError("The new password is too long (72 bytes at most).");
+    if (next !== repeat) return setError("The new passwords do not match.");
+    void attempt(async () => {
+      await api.changePassword(current, next);
+      setCurrent(""); setNext(""); setRepeat(""); setShowPassword(false);
+      setNotice("Password changed. Other devices were signed out.");
+      await loadSessions();
+    });
+  };
+  const deleteAccount = (event: FormEvent) => {
+    event.preventDefault();
+    void attempt(async () => {
+      await api.deleteAccount(deletePassword);
+      onSignedOut();
+    });
+  };
+
+  return (
+    <Card className="privacy-card security-card">
+      <div className="card-head"><div><Label>Sign-in and security</Label><div className="section-title">Your account</div></div><Icon name="lock" /></div>
+      <div className="security-row">
+        <span>{sessions === null ? "Checking sign-ins..." : `Signed in on ${sessions} ${sessions === 1 ? "device" : "devices"}`}</span>
+        <Button className="secondary-button" disabled={busy || sessions === 1} onClick={signOutOthers}>Sign out other devices</Button>
+      </div>
+      {!showPassword
+        ? <Button className="secondary-button" onClick={() => { setShowPassword(true); setNotice(""); }}>Change password</Button>
+        : (
+          <form className="security-form" onSubmit={changePassword}>
+            <label><span>Current password</span><input type="password" autoComplete="current-password" value={current} required onChange={(e) => setCurrent(e.target.value)} /></label>
+            <label><span>New password</span><input type="password" autoComplete="new-password" value={next} required minLength={15} onChange={(e) => setNext(e.target.value)} /><small>At least 15 characters. A short phrase works well.</small></label>
+            <label><span>Repeat new password</span><input type="password" autoComplete="new-password" value={repeat} required onChange={(e) => setRepeat(e.target.value)} /></label>
+            <div className="form-actions">
+              <Button className="secondary-button" onClick={() => { setShowPassword(false); setError(""); }}>Cancel</Button>
+              <Button type="submit" className="primary-button" disabled={busy}>{busy ? "Saving..." : "Change password"}</Button>
+            </div>
+          </form>
+        )}
+      {notice && <p className="invite-status" role="status">{notice}</p>}
+      {error && <p className="auth-message" role="alert">{error}</p>}
+      <div className="danger-zone">
+        <Label>Delete account</Label>
+        {!showDelete
+          ? <><p>Permanently removes your account, workouts, points, profile, and connections. This cannot be undone.</p>
+              <Button className="mini-text-button danger" onClick={() => setShowDelete(true)}>Delete my account...</Button></>
+          : (
+            <form className="security-form" onSubmit={deleteAccount}>
+              <p>Everything is deleted right away and cannot be recovered.</p>
+              <label><span>Password</span><input type="password" autoComplete="current-password" value={deletePassword} required onChange={(e) => setDeletePassword(e.target.value)} /></label>
+              <label><span>Type DELETE to confirm</span><input value={deleteWord} onChange={(e) => setDeleteWord(e.target.value)} autoComplete="off" /></label>
+              <div className="form-actions">
+                <Button className="secondary-button" onClick={() => { setShowDelete(false); setDeletePassword(""); setDeleteWord(""); }}>Cancel</Button>
+                <Button type="submit" className="primary-button danger-button" disabled={busy || deleteWord !== "DELETE" || !deletePassword}>{busy ? "Deleting..." : "Delete forever"}</Button>
+              </div>
+            </form>
+          )}
+      </div>
+    </Card>
+  );
+}
+
 export function Profile({
   data,
   error,
@@ -163,6 +252,8 @@ export function Profile({
   onLogout,
   isLoggingOut,
   logoutError,
+  onSignedOut,
+  openHistory,
 }: {
   data: ProfileResponse | null;
   error: string;
@@ -173,6 +264,8 @@ export function Profile({
   onLogout: () => void;
   isLoggingOut: boolean;
   logoutError: string;
+  onSignedOut: () => void;
+  openHistory: () => void;
 }) {
   const [showSettings, setShowSettings] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -200,6 +293,7 @@ export function Profile({
       <div className="welcome-row">
         <PageTitle subtitle="Your training journey, all in one place.">Account</PageTitle>
         <div className="title-actions">
+          <Button className="secondary-button" onClick={openHistory}><Icon name="calendar" size={16} /> Workout history</Button>
           <Button className="secondary-button" onClick={() => { setEditing(true); setSaved(false); }}><Icon name="edit" size={16} /> Edit profile</Button>
           <Button className="secondary-button" onClick={() => setShowSettings((visible) => !visible)}><Icon name="settings" size={17} /> Settings</Button>
         </div>
@@ -264,7 +358,6 @@ export function Profile({
                 <div><span>Primary goal</span><strong>{goalLabels[profile.primaryGoal]}</strong></div>
                 <div><span>Training level</span><strong>{levelLabels[profile.trainingLevel]}</strong></div>
                 <div><span>Weekly goal</span><strong>{profile.weeklyGoal} {profile.weeklyGoal === 1 ? "workout" : "workouts"}</strong></div>
-                <div><span>Preferred units</span><strong>{unitLabels[profile.preferredUnits]}</strong></div>
                 <div><span>Connections</span><strong>{connectionCount}</strong></div>
               </div>
             </Card>
@@ -315,6 +408,8 @@ export function Profile({
           </ul>
           <BlockedList />
         </Card>
+
+        <SecurityCard onSignedOut={onSignedOut} />
       </div>
     </div>
   );

@@ -65,6 +65,19 @@ class MemoryAuthStore implements AuthStore {
     this.accounts.set(email, account);
     return account;
   }
+  async findPasswordHash() {
+    return null;
+  }
+  async changePassword() {}
+  async countSessions() {
+    return 1;
+  }
+  async revokeOtherSessions() {
+    return 0;
+  }
+  async deleteAccount() {
+    return false;
+  }
 }
 
 function sessionCookie(response: Response) {

@@ -1,5 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { Router, type CookieOptions, type Request, type RequestHandler } from 'express';
+import {
+  Router,
+  type CookieOptions,
+  type Request,
+  type RequestHandler,
+  type Response,
+} from 'express';
 import { rateLimit } from 'express-rate-limit';
 import type { AuthResponse } from '@gatorgainz/types';
 import { hashPassword, isValidNewPassword, PASSWORD_MAX_BYTES, verifyPassword } from './passwords';
@@ -240,6 +246,85 @@ export function createAuthRouter(options: AuthOptions = {}) {
       return;
     }
     response.json({ user } satisfies AuthResponse);
+  });
+
+  // ---- Account security. Each route needs the current session. ----
+
+  const securityLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: options.authRateLimits?.loginMax ?? 10,
+    skipSuccessfulRequests: true,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: 'Too many attempts. Try again later.' },
+  });
+
+  async function currentSession(request: Request, response: Response) {
+    const tokenHash = presentedTokenHash(request);
+    const user = tokenHash ? await store!.findSessionUser(tokenHash) : null;
+    if (!user || !tokenHash) {
+      response.status(401).json({ error: 'Please sign in to continue.' });
+      return null;
+    }
+    return { user, tokenHash };
+  }
+
+  /** Re-checks the password before sensitive changes. Wrong passwords get 403, not 401. */
+  async function confirmPassword(userId: string, password: unknown, response: Response) {
+    const hash = await store!.findPasswordHash(userId);
+    const ok =
+      typeof password === 'string' &&
+      (await verifyPassword(password, hash ?? dummyPasswordHash)) &&
+      hash !== null;
+    if (!ok) response.status(403).json({ error: 'Your current password is incorrect.' });
+    return ok;
+  }
+
+  router.post('/password', requireJson, securityLimiter, async (request, response) => {
+    const session = await currentSession(request, response);
+    if (!session) return;
+    const body = objectBody(request.body);
+    const newPassword = body?.newPassword;
+    if (typeof newPassword !== 'string' || !isValidNewPassword(newPassword)) {
+      response.status(400).json({
+        error: 'Choose a new password of at least 15 characters and at most 72 UTF-8 bytes.',
+      });
+      return;
+    }
+    if (newPassword === body?.currentPassword) {
+      response.status(400).json({ error: 'Choose a password different from your current one.' });
+      return;
+    }
+    if (!(await confirmPassword(session.user.id, body?.currentPassword, response))) return;
+    await store.changePassword(session.user.id, await hashPassword(newPassword), session.tokenHash);
+    response.status(204).end();
+  });
+
+  router.get('/sessions', async (request, response) => {
+    const session = await currentSession(request, response);
+    if (!session) return;
+    response.json({ activeSessions: await store.countSessions(session.user.id) });
+  });
+
+  router.post('/sessions/revoke-others', async (request, response) => {
+    const session = await currentSession(request, response);
+    if (!session) return;
+    const revoked = await store.revokeOtherSessions(session.user.id, session.tokenHash);
+    response.json({ revoked });
+  });
+
+  router.delete('/account', requireJson, securityLimiter, async (request, response) => {
+    const session = await currentSession(request, response);
+    if (!session) return;
+    const body = objectBody(request.body);
+    if (body?.confirm !== 'DELETE') {
+      response.status(400).json({ error: 'Type DELETE to confirm.' });
+      return;
+    }
+    if (!(await confirmPassword(session.user.id, body?.password, response))) return;
+    await store.deleteAccount(session.user.id);
+    response.clearCookie(SESSION_COOKIE_NAME, cookieOptions);
+    response.status(204).end();
   });
 
   router.post('/logout', async (request, response) => {

@@ -189,6 +189,8 @@ export interface Profile {
   weeklyGoal: number;
   visibility: ProfileVisibility;
   joinedAt: string;
+  /** False until the user finishes the welcome flow after sign-up. */
+  onboarded: boolean;
 }
 
 /** Body for PATCH /api/me/profile. Send only the fields to change. */
@@ -204,7 +206,10 @@ export type UpdateProfileRequest = Partial<
     | 'weeklyGoal'
     | 'visibility'
   >
->;
+> & {
+  /** Send `true` to finish the welcome flow. It cannot be undone. */
+  onboarded?: true;
+};
 
 export interface Level {
   level: number;
@@ -327,4 +332,39 @@ export interface InviteResponse {
 export interface InvitePreview {
   fullName: string;
   handle: string;
+}
+
+/** One saved exercise as stored on the server, for showing and editing a workout. */
+export interface SavedExercise {
+  name: string;
+  group: string;
+  tracking: 'strength' | 'cardio';
+  sets: number;
+  reps: number;
+  minutes: number;
+  metricValue: number;
+}
+
+/** GET /api/me/workouts/:id */
+export interface WorkoutDetailResponse {
+  workout: WorkoutHistoryItem;
+  exercises: SavedExercise[];
+  award: WorkoutAward | null;
+}
+
+/** GET /api/auth/sessions */
+export interface SessionsResponse {
+  activeSessions: number;
+}
+
+/** Body for POST /api/auth/password */
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/** Body for DELETE /api/auth/account */
+export interface DeleteAccountRequest {
+  password: string;
+  confirm: 'DELETE';
 }

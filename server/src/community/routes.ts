@@ -225,6 +225,16 @@ export function createCommunityRouter(options: CommunityRouteOptions) {
     const people = await community.searchPeople(owner(response), parsed.query);
     response.json({ people } satisfies PeopleSearchResponse);
   });
+  signedIn.get('/people/:userId', async (request, response) => {
+    const userId = String(request.params.userId);
+    const person = UUID.test(userId) ? await community.getPerson(owner(response), userId) : null;
+    if (!person) {
+      // Same answer for missing, private, and blocked accounts.
+      response.status(404).json({ error: 'This profile is not available.' });
+      return;
+    }
+    response.json({ person } satisfies ConnectionResponse);
+  });
   signedIn.get('/leaderboard', async (request, response) => {
     const parsed = parseLeaderboard(request.query as Record<string, unknown>);
     if ('error' in parsed) {
