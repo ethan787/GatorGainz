@@ -36,6 +36,18 @@ export interface Workout {
   completedAt: string;
 }
 
+/** Body for POST /api/workouts. The owner always comes from the session, never the body. */
+export interface NewWorkoutRequest {
+  name: string;
+  category: Workout['category'];
+  durationMinutes: number;
+  completedAt: string;
+}
+
+export interface WorkoutResponse {
+  workout: Workout;
+}
+
 export interface Goal {
   id: string;
   userId: string;
