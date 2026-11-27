@@ -4,6 +4,15 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Vite resolves the linked workspace outside node_modules.
+  optimizeDeps: {
+    include: ['@gatorgainz/types/exercise-catalog'],
+  },
+  build: {
+    commonjsOptions: {
+      include: [/node_modules/, /\/shared\/exercise-catalog\.js$/],
+    },
+  },
   server: {
     port: 5173,
     strictPort: true,
