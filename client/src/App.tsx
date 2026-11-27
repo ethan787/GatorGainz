@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
-import type { AuthUser, ConnectionsResponse, ExerciseDefinition as Workout, InvitePreview, NewWorkoutRequest, ProfileResponse, WorkoutHistoryItem } from "@gatorgainz/types";
-import { EXERCISE_CATALOG as workouts } from "@gatorgainz/types/exercise-catalog";
+import type { AuthUser, ConnectionsResponse, InvitePreview, NewWorkoutRequest, ProfileResponse, WorkoutHistoryItem } from "@gatorgainz/types";
 import { getAuthErrorMessage, getCurrentUser, loginAccount, logoutAccount, registerAccount } from "./auth-api";
 import gatorMark from "./assets/gator-gainz-mark.png";
 import { Button, Card, getInitials, Icon, Label, PageTitle, StatCard, type IconName } from "./ui";
 import { api, ApiError, clearPendingInvite, errorMessage, localDate, pendingInvite } from "./api";
 import { Avatar, Community } from "./community";
 import { formatMinutes, Profile } from "./profile";
+import { workouts, type Workout } from "./catalog";
+import { WorkoutHistory } from "./history";
+import { Onboarding } from "./onboarding";
 
-type Tab = "home" | "log" | "community" | "profile";
+type Tab = "home" | "log" | "community" | "profile" | "history";
 type Theme = "light" | "dark";
 type AuthMode = "login" | "register";
 type UserAccount = AuthUser;
@@ -294,7 +296,7 @@ function ChallengeCard({ profile, goLog }: { profile: ProfileResponse | null; go
   );
 }
 
-function RecentActivity({ refreshKey, goLog }: { refreshKey: number; goLog: () => void }) {
+function RecentActivity({ refreshKey, goLog, openHistory }: { refreshKey: number; goLog: () => void; openHistory: () => void }) {
   const [items, setItems] = useState<WorkoutHistoryItem[] | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -313,6 +315,7 @@ function RecentActivity({ refreshKey, goLog }: { refreshKey: number; goLog: () =
     <Card className="recent-card">
       <div className="card-head">
         <div><Label>History</Label><div className="section-title">Recent activity</div></div>
+        {items && items.length > 0 && <Button className="text-button" onClick={openHistory}>View all <Icon name="chevron" size={15} /></Button>}
       </div>
       {error && <p className="auth-message" role="alert">{error}</p>}
       <div className="activity-list">
@@ -334,7 +337,7 @@ function greeting() {
   return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 }
 
-function Dashboard({ goLog, profile, user, refreshKey }: { goLog: () => void; profile: ProfileResponse | null; user: UserAccount; refreshKey: number }) {
+function Dashboard({ goLog, openHistory, profile, user, refreshKey }: { goLog: () => void; openHistory: () => void; profile: ProfileResponse | null; user: UserAccount; refreshKey: number }) {
   const stats = profile?.stats;
   const value = (number: number | undefined) => (number === undefined ? "—" : number.toLocaleString());
   return (
@@ -354,7 +357,7 @@ function Dashboard({ goLog, profile, user, refreshKey }: { goLog: () => void; pr
           <ChallengeCard profile={profile} goLog={goLog} />
           <WeeklyChart profile={profile} />
         </div>
-        <RecentActivity refreshKey={refreshKey} goLog={goLog} />
+        <RecentActivity refreshKey={refreshKey} goLog={goLog} openHistory={openHistory} />
       </div>
     </div>
   );
@@ -859,7 +862,7 @@ function InvitePrompt({ onDone }: { onDone: () => void }) {
   );
 }
 
-function AuthenticatedApp({ currentUser, setCurrentUser, theme, setTheme, onLogout }: { currentUser: UserAccount; setCurrentUser: (user: UserAccount) => void; theme: Theme; setTheme: (theme: Theme) => void; onLogout: () => Promise<void> }) {
+function AuthenticatedApp({ currentUser, setCurrentUser, theme, setTheme, onLogout, onSignedOut }: { currentUser: UserAccount; setCurrentUser: (user: UserAccount) => void; theme: Theme; setTheme: (theme: Theme) => void; onLogout: () => Promise<void>; onSignedOut: () => void }) {
   const [tab, setTab] = useState<Tab>("home");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
@@ -868,7 +871,7 @@ function AuthenticatedApp({ currentUser, setCurrentUser, theme, setTheme, onLogo
   const [profileError, setProfileError] = useState("");
   const [connections, setConnections] = useState<ConnectionsResponse | null>(null);
   const [activityKey, setActivityKey] = useState(0);
-  const titles = useMemo(() => ({ home: "Overview", log: "Log workout", community: "Community", profile: "Account" }), []);
+  const titles = useMemo(() => ({ home: "Overview", log: "Log workout", community: "Community", profile: "Account", history: "History" }), []);
 
   const loadProfile = useCallback(() => {
     setProfileError("");
@@ -923,10 +926,15 @@ function AuthenticatedApp({ currentUser, setCurrentUser, theme, setTheme, onLogo
       <main className="main-area">
         <TopBar title={titles[tab]} points={profile?.stats.totalPoints ?? null} connections={connections} onChanged={refreshCommunity} openCommunity={() => setTab("community")} />
         <InvitePrompt onDone={refreshCommunity} />
-        {tab === "home" && <Dashboard goLog={() => setTab("log")} profile={profile} user={currentUser} refreshKey={activityKey} />}
+        {profile && !profile.profile.onboarded
+          ? <Onboarding data={profile} onDone={profileChanged} />
+          : <>
+        {tab === "home" && <Dashboard goLog={() => setTab("log")} openHistory={() => setTab("history")} profile={profile} user={currentUser} refreshKey={activityKey} />}
+        {tab === "history" && <WorkoutHistory onBack={() => setTab("home")} goLog={() => setTab("log")} onChanged={() => { setActivityKey((key) => key + 1); loadProfile(); }} />}
         {tab === "log" && <WorkoutLogger userId={currentUser.id} onSaved={workoutSaved} />}
         {tab === "community" && <Community user={currentUser} profile={profile} connections={connections} onChanged={refreshCommunity} />}
-        {tab === "profile" && <Profile data={profile} error={profileError} onRetry={loadProfile} onProfileChange={profileChanged} theme={theme} setTheme={setTheme} onLogout={logout} isLoggingOut={isLoggingOut} logoutError={logoutError} />}
+        {tab === "profile" && <Profile data={profile} error={profileError} onRetry={loadProfile} onProfileChange={profileChanged} theme={theme} setTheme={setTheme} onLogout={logout} isLoggingOut={isLoggingOut} logoutError={logoutError} onSignedOut={onSignedOut} openHistory={() => setTab("history")} />}
+          </>}
         {toast !== null && <div className="session-toast" role="status"><Icon name="bolt" size={17} /> {toast}</div>}
       </main>
     </>
@@ -1001,7 +1009,7 @@ export default function App() {
       {isCheckingSession || sessionError
         ? <SessionStatus error={sessionError} onRetry={() => setSessionAttempt((attempt) => attempt + 1)} />
         : currentUser
-          ? <AuthenticatedApp key={currentUser.id} currentUser={currentUser} setCurrentUser={setCurrentUser} theme={theme} setTheme={setTheme} onLogout={logout} />
+          ? <AuthenticatedApp key={currentUser.id} currentUser={currentUser} setCurrentUser={setCurrentUser} theme={theme} setTheme={setTheme} onLogout={logout} onSignedOut={() => setCurrentUser(null)} />
           : <AuthScreen onAuthenticated={setCurrentUser} />}
     </div>
   );

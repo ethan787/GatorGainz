@@ -39,4 +39,17 @@ export class SessionOnlyAuthStore implements AuthStore {
   }
   async createSession() {}
   async revokeSession() {}
+  async findPasswordHash() {
+    return null;
+  }
+  async changePassword() {}
+  async countSessions() {
+    return 1;
+  }
+  async revokeOtherSessions() {
+    return 0;
+  }
+  async deleteAccount() {
+    return false;
+  }
 }

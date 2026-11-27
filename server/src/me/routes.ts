@@ -3,6 +3,7 @@ import type {
   AuthUser,
   PointsResponse,
   ScoredWorkoutResponse,
+  WorkoutDetailResponse,
   WorkoutHistoryResponse,
 } from '@gatorgainz/types';
 import type { AuthStore } from '../auth/store';
@@ -61,6 +62,18 @@ export function createMeRouter(store: FitnessStore, options: MeRouteOptions = {}
         nextCursor: page.hasMore && last ? encodeCursor(last, query) : null,
       },
     } satisfies WorkoutHistoryResponse);
+  });
+
+  router.get('/workouts/:id', async (request, response) => {
+    const detail = await store.getUserWorkoutDetail(
+      owner(response.locals),
+      String(request.params.id),
+    );
+    if (!detail) {
+      response.status(404).json({ error: 'Workout not found.' });
+      return;
+    }
+    response.json(detail satisfies WorkoutDetailResponse);
   });
 
   router.put('/workouts/:id', requireJson, async (request, response) => {

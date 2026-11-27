@@ -11,7 +11,10 @@ import type {
   PeopleSearchResponse,
   ProfileResponse,
   ScoredWorkoutResponse,
+  SessionsResponse,
   UpdateProfileRequest,
+  UpdateWorkoutRequest,
+  WorkoutDetailResponse,
   WorkoutHistoryResponse,
 } from "@gatorgainz/types";
 
@@ -62,6 +65,26 @@ export const api = {
 
   submitWorkout: (workout: NewWorkoutRequest) => request<ScoredWorkoutResponse>("POST", "/api/workouts", workout),
   recentWorkouts: (limit = 5) => request<WorkoutHistoryResponse>("GET", `/api/me/workouts?limit=${limit}`),
+  history: (options: { start?: string; end?: string; cursor?: string | null; limit?: number }) => {
+    const params = new URLSearchParams({ limit: String(options.limit ?? 20) });
+    if (options.cursor) params.set("cursor", options.cursor);
+    else {
+      if (options.start) params.set("start", options.start);
+      if (options.end) params.set("end", options.end);
+    }
+    return request<WorkoutHistoryResponse>("GET", `/api/me/workouts?${params}`);
+  },
+  workoutDetail: (id: string) => request<WorkoutDetailResponse>("GET", `/api/me/workouts/${encodeURIComponent(id)}`),
+  updateWorkout: (id: string, body: UpdateWorkoutRequest) =>
+    request<ScoredWorkoutResponse>("PUT", `/api/me/workouts/${encodeURIComponent(id)}`, body),
+  deleteWorkout: (id: string) => request<void>("DELETE", `/api/me/workouts/${encodeURIComponent(id)}`),
+  person: (userId: string) => request<ConnectionResponse>("GET", `/api/community/people/${encodeURIComponent(userId)}`),
+
+  sessions: () => request<SessionsResponse>("GET", "/api/auth/sessions"),
+  signOutOthers: () => request<{ revoked: number }>("POST", "/api/auth/sessions/revoke-others"),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>("POST", "/api/auth/password", { currentPassword, newPassword }),
+  deleteAccount: (password: string) => request<void>("DELETE", "/api/auth/account", { password, confirm: "DELETE" }),
 
   connections: () => request<ConnectionsResponse>("GET", "/api/me/connections"),
   connectByHandle: (handle: string) => request<ConnectionResponse>("POST", "/api/me/connections", { handle }),

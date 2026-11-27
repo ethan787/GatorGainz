@@ -84,6 +84,7 @@ export function validateProfileUpdate(body: unknown): Result<{ update: UpdatePro
     'preferredUnits',
     'weeklyGoal',
     'visibility',
+    'onboarded',
   ]);
   const unknown = Object.keys(input).filter((key) => !allowed.has(key));
   if (unknown.length > 0)
@@ -136,6 +137,10 @@ export function validateProfileUpdate(body: unknown): Result<{ update: UpdatePro
       return { error: 'Weekly goal must be a whole number from 1 to 14.' };
     }
     update.weeklyGoal = goal;
+  }
+  if ('onboarded' in input) {
+    if (input.onboarded !== true) return { error: 'onboarded can only be set to true.' };
+    update.onboarded = true;
   }
   if ('visibility' in input) {
     if (!oneOf(input.visibility, VISIBILITIES))

@@ -7,6 +7,7 @@ import type {
   UserSummary,
   Workout,
   WorkoutAward,
+  WorkoutDetailResponse,
   WorkoutHistoryItem,
 } from '@gatorgainz/types';
 import type { HistoryQuery } from './me/history-query';
@@ -60,6 +61,8 @@ export interface FitnessStore {
     userId: string,
     query: HistoryQuery,
   ): Promise<{ items: WorkoutHistoryItem[]; hasMore: boolean }>;
+  /** One owned workout with its saved exercises and award. Null when not found for this user. */
+  getUserWorkoutDetail(userId: string, workoutId: string): Promise<WorkoutDetailResponse | null>;
   /** Replaces an owned workout and its award atomically. Null when not found for this user. */
   updateUserWorkout(
     userId: string,

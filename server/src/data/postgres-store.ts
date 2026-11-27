@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from 'pg';
 import type {
   Goal,
   Ranking,
+  SavedExercise,
   ScoringVersion,
   UserSummary,
   Workout,
@@ -215,6 +216,34 @@ export function createPostgresStore(pool: Pool): FitnessStore {
           scoringVersion: row.scoringVersion ?? null,
         })),
         hasMore: rows.length > query.limit,
+      };
+    },
+    async getUserWorkoutDetail(userId, workoutId) {
+      if (!UUID.test(workoutId)) return null;
+      const workout = await pool.query<WorkoutHistoryItem>(
+        `SELECT w.id, w.user_id AS "userId", w.name, w.category,
+                w.duration_minutes AS "durationMinutes",
+                to_char(w.completed_at, 'YYYY-MM-DD') AS "completedAt", ${recordedAtColumn},
+                a.points, a.scoring_version AS "scoringVersion"
+         FROM workouts w LEFT JOIN workout_awards a ON a.workout_id = w.id
+         WHERE w.id = $1 AND w.user_id = $2`,
+        [workoutId, userId],
+      );
+      if (workout.rows.length === 0) return null;
+      const [exercises, award] = await Promise.all([
+        pool.query<SavedExercise>(
+          `SELECT name, muscle_group AS "group", tracking, sets, reps, minutes,
+                  metric_value::float8 AS "metricValue"
+           FROM workout_exercises WHERE workout_id = $1 ORDER BY position`,
+          [workoutId],
+        ),
+        pool.query<AwardRow>(`${awardSelect} WHERE w.id = $1`, [workoutId]),
+      ]);
+      const row = workout.rows[0];
+      return {
+        workout: { ...row, points: row.points ?? null, scoringVersion: row.scoringVersion ?? null },
+        exercises: exercises.rows,
+        award: award.rows[0] ?? null,
       };
     },
     async updateUserWorkout(userId, workoutId, fields, exercises, rescore) {

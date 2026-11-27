@@ -117,6 +117,25 @@ export function createDemoStore(): FitnessStore {
         hasMore: matching.length > query.limit,
       };
     },
+    async getUserWorkoutDetail(userId, workoutId) {
+      const workout = owned(userId, workoutId);
+      if (!workout) return null;
+      return {
+        workout: historyItem(workout),
+        exercises: details
+          .get(workoutId)!
+          .exercises.map(({ name, group, tracking, sets, reps, minutes, metricValue }) => ({
+            name,
+            group,
+            tracking,
+            sets,
+            reps,
+            minutes,
+            metricValue,
+          })),
+        award: awardFor(workout),
+      };
+    },
     async updateUserWorkout(userId, workoutId, fields, exercises, rescore) {
       const workout = owned(userId, workoutId);
       if (!workout) return null;

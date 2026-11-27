@@ -14,7 +14,7 @@ export type App = ReturnType<typeof createApp>;
 
 /** A disposable schema with all migrations applied. Dropped in `close()`. */
 export async function createTestDatabase(
-  prefix: 'gg_history_test' | 'gg_scoring_test' | 'gg_community_test',
+  prefix: 'gg_history_test' | 'gg_scoring_test' | 'gg_community_test' | 'gg_account_test',
 ) {
   const schema = `${prefix}_${randomBytes(12).toString('hex')}`;
   if (!/^gg_[a-z]+_test_[a-f0-9]{24}$/.test(schema)) throw new Error('Unsafe test schema name.');

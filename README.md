@@ -74,6 +74,7 @@ docs/authentication.md           Account implementation and code-review guide
 docs/workout-history.md          Private history contract, pagination, verification
 docs/workout-scoring.md          Scoring rules, retry safety, totals, edit/delete policy
 docs/community-and-profile.md    Privacy model, connections, invites, leaderboards, profile stats
+docs/account-and-history-ui.md   History page, editing, person profiles, security, welcome flow
 docs/backlog.md                  Starter tasks for Jira
 .circleci/config.yml             Install, typecheck, test, and build
 docs/ci.md                       CircleCI connection and backend validation guide
@@ -126,6 +127,8 @@ Signed-in users can save, score, and read their own workouts. These routes need 
 | GET         | `/api/community/people?q=`           | Search public accounts by name or username (2–40 characters)                   |
 | GET         | `/api/community/leaderboard`         | `scope=global\|connections`, `range=week\|month\|all`                          |
 | GET         | `/api/invites/:code`                 | Public preview of an invite link: inviter's name and username only             |
+
+**Account security** (session required): `POST /api/auth/password` (current + new password; signs out other devices), `GET /api/auth/sessions`, `POST /api/auth/sessions/revoke-others`, and `DELETE /api/auth/account` (password + `confirm: "DELETE"`). `GET /api/me/workouts/:id` returns one workout with its exercises for the history page. See [account and history](docs/account-and-history-ui.md).
 
 `name` is 1–120 characters, `category` is `strength`, `cardio`, or `mobility`, `durationMinutes` is a whole number from 1 to 1440, and `completedAt` is a real `YYYY-MM-DD` date that is not in the future. Any `userId` in the body is ignored. Saved workouts count toward goals and rankings immediately.
 

@@ -59,6 +59,8 @@ export interface CommunityStore {
     today: string,
   ): Promise<ProfileResponse>;
   searchPeople(viewerId: string, query: string): Promise<PersonCard[]>;
+  /** One person's card, if the viewer may see them (public or connected, not blocked). */
+  getPerson(viewerId: string, userId: string): Promise<PersonCard | null>;
   getConnections(viewerId: string): Promise<ConnectionsResponse>;
   requestConnection(
     viewerId: string,
@@ -173,7 +175,7 @@ export function createPostgresCommunityStore(pool: Pool): CommunityStore {
         `SELECT u.id AS "userId", u.display_name AS "fullName", u.email, p.handle, p.bio,
            p.primary_goal AS "primaryGoal", p.training_level AS "trainingLevel",
            p.preferred_units AS "preferredUnits", p.weekly_goal AS "weeklyGoal", p.visibility,
-           u.created_at AS "joinedAt"
+           u.created_at AS "joinedAt", p.onboarded_at IS NOT NULL AS onboarded
          FROM users u JOIN user_profiles p ON p.user_id = u.id WHERE u.id = $1`,
         [userId],
       ),
@@ -297,10 +299,15 @@ export function createPostgresCommunityStore(pool: Pool): CommunityStore {
             ['visibility', update.visibility],
           ];
           const set = columns.filter(([, value]) => value !== undefined);
-          if (set.length > 0) {
+          // Finishing the welcome flow is recorded once and never cleared.
+          const onboarded = update.onboarded
+            ? ', onboarded_at = COALESCE(onboarded_at, now())'
+            : '';
+          if (set.length > 0 || onboarded) {
+            const assignments = set.map(([column], i) => `${column} = $${i + 2}`);
             await client.query(
-              `UPDATE user_profiles SET ${set.map(([column], i) => `${column} = $${i + 2}`).join(', ')},
-                 updated_at = now() WHERE user_id = $1`,
+              `UPDATE user_profiles SET ${[...assignments, 'updated_at = now()'].join(', ')}${onboarded}
+               WHERE user_id = $1`,
               [userId, ...set.map(([, value]) => value)],
             );
           }
@@ -325,6 +332,18 @@ export function createPostgresCommunityStore(pool: Pool): CommunityStore {
         [viewerId, pattern, query],
       );
       return rows.map(toCard);
+    },
+
+    async getPerson(viewerId, userId) {
+      await ensure(viewerId);
+      const { rows } = await pool.query<CardRow>(
+        `${cardSelect('$1')}
+         WHERE u.id = $2 AND u.id <> $1 AND u.password_hash IS NOT NULL
+           AND ${notBlocked('$1', 'u.id')}
+           AND (p.visibility = 'public' OR c.status IS NOT NULL)`,
+        [viewerId, userId],
+      );
+      return rows[0] ? toCard(rows[0]) : null;
     },
 
     async getConnections(viewerId) {
