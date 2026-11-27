@@ -104,4 +104,3 @@ export function StatCard({ icon, label, value, detail, color }: { icon: IconName
     </Card>
   );
 }
-

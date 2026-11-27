@@ -107,7 +107,7 @@ function PeopleSearch({ onChanged, refreshKey }: { onChanged: () => void; refres
       </div>
       <div className="search-box">
         <Icon name="search" size={18} />
-        <input autoFocus aria-label="Search people" value={query} maxLength={40} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name or @username" />
+        <input aria-label="Search people" value={query} maxLength={40} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name or @username" />
       </div>
       <div className="people-results" aria-live="polite">
         {people.map((person) => (
