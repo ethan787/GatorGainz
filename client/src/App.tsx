@@ -15,7 +15,6 @@ type Theme = "light" | "dark";
 type AuthMode = "login" | "register";
 type UserAccount = AuthUser;
 
-
 type SessionExercise = Workout & {
   id: string;
   sets: number;
@@ -24,7 +23,6 @@ type SessionExercise = Workout & {
   metricValue: number;
   earned: number;
 };
-
 
 function getFirstName(name: string) {
   return name.trim().split(/\s+/)[0] || "Gator";

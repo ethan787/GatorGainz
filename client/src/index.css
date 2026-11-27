@@ -1368,7 +1368,10 @@ body {
 /* ---- History, workout editor, person sheet, security, welcome flow ---- */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .muted { color: var(--muted); font-size: 10px; line-height: 1.5; }
-.sheet-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 20px; background: rgba(8, 14, 28, .55); }
+.sheet-backdrop { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 20px; border: 0; background: transparent; color: inherit; }
+.sheet-backdrop[open] { display: grid; place-items: center; }
+.sheet-backdrop::backdrop { background: rgba(8, 14, 28, .55); }
+.sheet-dismiss { position: absolute; inset: 0; border: 0; background: transparent; }
 .sheet { position: relative; width: min(560px, 100%); max-height: calc(100vh - 40px); overflow: auto; padding: 26px; }
 .sheet-close { position: absolute; top: 14px; right: 14px; }
 .sheet .section-title { margin: 4px 0 10px; padding-right: 36px; }
@@ -1433,8 +1436,13 @@ body {
 .choice { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); padding: 10px 12px; font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; text-align: left; }
 .choice small { display: block; margin-top: 3px; color: var(--muted); font-weight: 400; font-size: 8px; }
 .choice.active { border-color: var(--navy); background: rgba(0, 33, 165, .07); color: var(--navy); }
+.onboarding-goal { border: 0; padding: 0; margin: 0; }
+.onboarding-goal legend { margin-bottom: 5px; }
 .goal-picker { display: flex; align-items: center; gap: 14px; }
-.goal-picker strong { font-size: 22px; min-width: 28px; text-align: center; }
+.goal-picker output { font-size: 22px; font-weight: 700; min-width: 28px; text-align: center; }
+.onboarding-visibility label { display: grid; grid-template-columns: auto 1fr; column-gap: 9px; row-gap: 3px; font-size: 10px; font-weight: 700; }
+.onboarding-visibility input { grid-row: span 2; }
+.onboarding-visibility small { grid-column: 2; font-weight: 400; line-height: 1.45; }
 .onboarding-actions > span { flex: 1; }
 
 .app-shell[data-theme="dark"] .editor-grid input,

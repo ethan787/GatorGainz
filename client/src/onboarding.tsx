@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import type { PrimaryGoal, ProfileResponse, ProfileVisibility, TrainingLevel } from "@gatorgainz/types";
 import { api, errorMessage } from "./api";
 import { goalLabels } from "./profile";
@@ -13,6 +13,7 @@ const levels: [TrainingLevel, string, string][] = [
 /** Three short steps after sign-up. Saving or skipping both mark the welcome flow done. */
 export function Onboarding({ data, onDone }: { data: ProfileResponse; onDone: (result: ProfileResponse) => void }) {
   const { profile } = data;
+  const visibilityId = useId();
   const [step, setStep] = useState(0);
   const [fullName, setFullName] = useState(profile.fullName);
   const [handle, setHandle] = useState(profile.handle);
@@ -73,7 +74,7 @@ export function Onboarding({ data, onDone }: { data: ProfileResponse; onDone: (r
                 <div className="section-title">How should people know you?</div>
                 <p className="muted">Your name and username appear on the leaderboard and when people search for you.</p>
               </div>
-              <label className="wide"><span>Name</span><input value={fullName} maxLength={80} required autoFocus onChange={(e) => setFullName(e.target.value)} /></label>
+              <label className="wide"><span>Name</span><input value={fullName} maxLength={80} required onChange={(e) => setFullName(e.target.value)} /></label>
               <label className="wide">
                 <span>Username</span>
                 <div className="handle-input"><b>@</b><input value={handle} maxLength={24} required onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} /></div>
@@ -99,15 +100,15 @@ export function Onboarding({ data, onDone }: { data: ProfileResponse; onDone: (r
                   </button>
                 ))}
               </div>
-              <label className="wide">
-                <span>Workouts per week</span>
+              <fieldset className="wide onboarding-goal">
+                <legend>Workouts per week</legend>
                 <div className="goal-picker">
                   <Button className="icon-button" label="Fewer" disabled={weeklyGoal <= 1} onClick={() => setWeeklyGoal(weeklyGoal - 1)}>−</Button>
-                  <strong>{weeklyGoal}</strong>
+                  <output>{weeklyGoal}</output>
                   <Button className="icon-button" label="More" disabled={weeklyGoal >= 14} onClick={() => setWeeklyGoal(weeklyGoal + 1)}>+</Button>
                 </div>
                 <small>Your dashboard tracks this over the last 7 days.</small>
-              </label>
+              </fieldset>
             </>
           )}
           {step === 2 && (
@@ -117,17 +118,18 @@ export function Onboarding({ data, onDone }: { data: ProfileResponse; onDone: (r
                 <div className="section-title">Who can find you?</div>
                 <p className="muted">Either way, other people only see your name, username, level, and points. You can change this later on the Account page.</p>
               </div>
-              <fieldset className="wide visibility-options">
+              <fieldset className="wide visibility-options onboarding-visibility">
                 <legend className="sr-only">Visibility</legend>
-                {(["public", "private"] as ProfileVisibility[]).map((value) => (
-                  <label key={value} className={visibility === value ? "active" : ""}>
-                    <input type="radio" name="onboarding-visibility" checked={visibility === value} onChange={() => setVisibility(value)} />
-                    <span><strong>{value === "public" ? "Public" : "Private"}</strong>
-                      <small>{value === "public"
-                        ? "People can search for you and see you on the leaderboard."
-                        : "Hidden from search and the global leaderboard. Friends connect through your invite link."}</small></span>
-                  </label>
-                ))}
+                <label htmlFor={`${visibilityId}-public`} className={visibility === "public" ? "active" : ""}>
+                  <input id={`${visibilityId}-public`} type="radio" name="onboarding-visibility" value="public" checked={visibility === "public"} onChange={() => setVisibility("public")} />
+                  Public
+                  <small>People can search for you and see you on the leaderboard.</small>
+                </label>
+                <label htmlFor={`${visibilityId}-private`} className={visibility === "private" ? "active" : ""}>
+                  <input id={`${visibilityId}-private`} type="radio" name="onboarding-visibility" value="private" checked={visibility === "private"} onChange={() => setVisibility("private")} />
+                  Private
+                  <small>Hidden from search and the global leaderboard. Friends connect through your invite link.</small>
+                </label>
               </fieldset>
             </>
           )}

@@ -3,7 +3,6 @@ import type {
   BlockedUser,
   PrimaryGoal,
   ProfileResponse,
-  ProfileVisibility,
   TrainingLevel,
   UpdateProfileRequest,
 } from "@gatorgainz/types";
@@ -106,15 +105,16 @@ function EditProfile({ data, onSaved, onCancel }: { data: ProfileResponse; onSav
         </label>
         <fieldset className="wide visibility-options">
           <legend>Who can find you</legend>
-          {(["public", "private"] as ProfileVisibility[]).map((value) => (
-            <label key={value} className={form.visibility === value ? "active" : ""}>
-              <input type="radio" name="visibility" value={value} checked={form.visibility === value} onChange={() => set("visibility", value)} />
-              <span><strong>{value === "public" ? "Public" : "Private"}</strong>
-                <small>{value === "public"
-                  ? "Anyone signed in can find you and see your name, username, and points on the leaderboard."
-                  : "Hidden from search and the global leaderboard. Only connections see you; new people need your invite link."}</small></span>
-            </label>
-          ))}
+          <label className={form.visibility === "public" ? "active" : ""}>
+            <input type="radio" name="visibility" value="public" checked={form.visibility === "public"} onChange={() => set("visibility", "public")} />
+            <span><strong>Public</strong>
+              <small>Anyone signed in can find you and see your name, username, and points on the leaderboard.</small></span>
+          </label>
+          <label className={form.visibility === "private" ? "active" : ""}>
+            <input type="radio" name="visibility" value="private" checked={form.visibility === "private"} onChange={() => set("visibility", "private")} />
+            <span><strong>Private</strong>
+              <small>Hidden from search and the global leaderboard. Only connections see you; new people need your invite link.</small></span>
+          </label>
         </fieldset>
         {error && <div className="auth-message wide" role="alert">{error}</div>}
         <div className="form-actions wide">

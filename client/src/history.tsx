@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import type { SavedExercise, Workout as SavedWorkout, WorkoutDetailResponse, WorkoutExerciseInput, WorkoutHistoryItem } from "@gatorgainz/types";
 import { api, errorMessage, localDate } from "./api";
 import { workouts as catalog } from "./catalog";
@@ -16,18 +16,24 @@ const longDate = (date: string) =>
 
 /** Click-outside and Escape close the sheet. */
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    dialog.showModal();
+    return () => dialog.close();
+  }, []);
   return (
-    <div className="sheet-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="sheet card" role="dialog" aria-modal="true" aria-label={title}>
+    <dialog ref={dialogRef} className="sheet-backdrop" aria-label={title} onCancel={(event) => {
+      event.preventDefault();
+      onClose();
+    }}>
+      <button type="button" className="sheet-dismiss" aria-label="Dismiss dialog" tabIndex={-1} onClick={onClose} />
+      <div className="sheet card">
         <Button className="sheet-close icon-button" label="Close" onClick={onClose}><Icon name="x" size={18} /></Button>
         {children}
       </div>
-    </div>
+    </dialog>
   );
 }
 

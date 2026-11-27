@@ -213,41 +213,41 @@ export function createInviteRouter(options: CommunityRouteOptions) {
 /** /api/community — people search and leaderboards for signed-in users. */
 export function createCommunityRouter(options: CommunityRouteOptions) {
   const { router, community, authStore } = baseRouter(options);
-  if (!community || !authStore) return router;
-  const signedIn = router;
-  signedIn.use(createRequireUser(authStore));
-  signedIn.get('/people', async (request, response) => {
-    const parsed = parseSearch(request.query.q);
-    if ('error' in parsed) {
-      response.status(400).json({ error: parsed.error });
-      return;
-    }
-    const people = await community.searchPeople(owner(response), parsed.query);
-    response.json({ people } satisfies PeopleSearchResponse);
-  });
-  signedIn.get('/people/:userId', async (request, response) => {
-    const userId = String(request.params.userId);
-    const person = UUID.test(userId) ? await community.getPerson(owner(response), userId) : null;
-    if (!person) {
-      // Same answer for missing, private, and blocked accounts.
-      response.status(404).json({ error: 'This profile is not available.' });
-      return;
-    }
-    response.json({ person } satisfies ConnectionResponse);
-  });
-  signedIn.get('/leaderboard', async (request, response) => {
-    const parsed = parseLeaderboard(request.query as Record<string, unknown>);
-    if ('error' in parsed) {
-      response.status(400).json({ error: parsed.error });
-      return;
-    }
-    const board = await community.getLeaderboard(
-      owner(response),
-      parsed.scope,
-      parsed.range,
-      resolveToday(request.query.today),
-    );
-    response.json(board satisfies LeaderboardResponse);
-  });
+  if (community && authStore) {
+    router.use(createRequireUser(authStore));
+    router.get('/people', async (request, response) => {
+      const parsed = parseSearch(request.query.q);
+      if ('error' in parsed) {
+        response.status(400).json({ error: parsed.error });
+        return;
+      }
+      const people = await community.searchPeople(owner(response), parsed.query);
+      response.json({ people } satisfies PeopleSearchResponse);
+    });
+    router.get('/people/:userId', async (request, response) => {
+      const userId = String(request.params.userId);
+      const person = UUID.test(userId) ? await community.getPerson(owner(response), userId) : null;
+      if (!person) {
+        // Same answer for missing, private, and blocked accounts.
+        response.status(404).json({ error: 'This profile is not available.' });
+        return;
+      }
+      response.json({ person } satisfies ConnectionResponse);
+    });
+    router.get('/leaderboard', async (request, response) => {
+      const parsed = parseLeaderboard(request.query as Record<string, unknown>);
+      if ('error' in parsed) {
+        response.status(400).json({ error: parsed.error });
+        return;
+      }
+      const board = await community.getLeaderboard(
+        owner(response),
+        parsed.scope,
+        parsed.range,
+        resolveToday(request.query.today),
+      );
+      response.json(board satisfies LeaderboardResponse);
+    });
+  }
   return router;
 }

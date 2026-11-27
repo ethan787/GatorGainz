@@ -10,7 +10,9 @@ export const addDays = (date: string, days: number) =>
  * yesterday if nothing is logged yet today, so a streak is not lost before the day ends.
  */
 export function streaks(dates: readonly string[], today: string) {
-  const days = [...new Set(dates)].filter((d) => d <= today).sort();
+  const days = [...new Set(dates)]
+    .filter((d) => d <= today)
+    .sort((a, b) => a.localeCompare(b, 'en-US'));
   let longest = 0;
   let run = 0;
   for (let i = 0; i < days.length; i++) {
