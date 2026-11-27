@@ -10,6 +10,8 @@ export interface AuthOptions {
   secureCookies?: boolean;
   authOrigin?: string;
   authRateLimits?: { loginMax?: number; registerMax?: number };
+  /** Runs after a new account is saved, e.g. to create its community profile. */
+  onRegistered?: (userId: string) => Promise<void>;
 }
 
 export const SESSION_COOKIE_NAME = 'gatorgainz_session';
@@ -184,6 +186,12 @@ export function createAuthRouter(options: AuthOptions = {}) {
         expires: session.record.expiresAt,
         maxAge: SESSION_TTL_MS,
       });
+      if (options.onRegistered) {
+        // The account exists either way; a missing profile is created on first use.
+        await options.onRegistered(user.id).catch((error: unknown) => {
+          console.error('Could not create the profile after registration:', error);
+        });
+      }
       response.status(201).json({ user } satisfies AuthResponse);
     } catch (error) {
       if (error instanceof EmailAlreadyRegisteredError) {

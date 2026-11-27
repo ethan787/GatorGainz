@@ -1,45 +1,9 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
-import type { AuthUser } from '@gatorgainz/types';
 import { createApp } from '../src/app';
 import { createDemoStore } from '../src/data/demo-store';
-import type { AuthStore } from '../src/auth/store';
-import { hashSessionToken, SESSION_COOKIE_NAME } from '../src/auth/routes';
 import { MAX_WORKOUT_MINUTES, validateNewWorkout } from '../src/workouts/routes';
-
-/** Minimal auth store: only session lookup matters for workout routes. */
-class SessionOnlyAuthStore implements AuthStore {
-  sessions = new Map<string, { user: AuthUser; expiresAt: Date }>();
-
-  signIn(name: string, expiresInMs = 60_000) {
-    const user: AuthUser = {
-      id: randomUUID(),
-      fullName: name,
-      email: `${randomUUID()}@example.com`,
-      joinedAt: new Date().toISOString(),
-    };
-    const token = randomBytes(32).toString('base64url');
-    this.sessions.set(hashSessionToken(token), {
-      user,
-      expiresAt: new Date(Date.now() + expiresInMs),
-    });
-    return { user, cookie: `${SESSION_COOKIE_NAME}=${token}` };
-  }
-
-  async findSessionUser(tokenHash: string) {
-    const session = this.sessions.get(tokenHash);
-    return session && session.expiresAt.getTime() > Date.now() ? session.user : null;
-  }
-
-  async registerWithSession(): Promise<AuthUser> {
-    throw new Error('not used');
-  }
-  async findUserByEmail() {
-    return null;
-  }
-  async createSession() {}
-  async revokeSession() {}
-}
+import { SessionOnlyAuthStore } from './helpers/session-auth-store';
 
 const validWorkout = {
   name: '  Leg day  ',

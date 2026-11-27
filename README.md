@@ -1,6 +1,6 @@
 # GatorGainz
 
-GatorGainz combines the Figma-designed fitness interface with an Express REST API. Users register and sign in with accounts and sessions saved in PostgreSQL. The client includes workout logging, points, community views, and light/dark themes. Workout drafts, history, and pinned exercises currently stay in the browser, scoped to the signed-in account.
+GatorGainz combines the Figma-designed fitness interface with an Express REST API. Users register and sign in with accounts and sessions saved in PostgreSQL. Workouts are saved and scored on the server, so points, streaks, history, leaderboards, and connections follow the account across devices. Only unfinished workout drafts and pinned exercises stay in the browser.
 
 ## Stack
 
@@ -24,7 +24,7 @@ npm install
 
 Configure PostgreSQL using the next section, then run `npm run dev` and open **http://127.0.0.1:5173**. The root command starts the Figma-designed client in `client/` and the API at **http://127.0.0.1:3001/api/health**. Vite proxies `/api` requests to Express, so no client environment file is needed. Stop both processes with **Ctrl+C**.
 
-Choose **Create account** on the first screen. Use a name, email address, and password of at least 15 characters and at most 72 UTF-8 bytes. Registration signs you in, and your session survives a page reload. To sign out, open **Account → Settings → Log out of GatorGainz**. You can then log in using the registered email and password, including from another browser. Account records are shared through PostgreSQL; workout data stays in the browser where it was created. Some statistics, community entries, and controls remain sample data or placeholders.
+Choose **Create account** on the first screen. Use a name, email address, and password of at least 15 characters and at most 72 UTF-8 bytes. Registration signs you in, and your session survives a page reload. To sign out, open **Account → Settings → Log out of GatorGainz**. You can then log in using the registered email and password, including from another browser. Accounts, workouts, points, profiles, and connections are stored in PostgreSQL. To try Community, register a second account in another browser and connect using its username or your invite link (Community → Share invite).
 
 The former standalone `figma-ui/` export has been consolidated into `client/`, replacing the original dashboard. There is one frontend, installed and checked through the root npm workspace commands; pnpm and the separate port 8443 preview are no longer needed. Prototype accounts formerly stored in localStorage are removed when the app opens and are not migrated into real accounts. Register a new server account; old shared workout storage is not assigned to it.
 
@@ -64,6 +64,7 @@ server/
   src/auth/                     Account routes, bcrypt helpers, SQL session storage
   src/scoring/                  Exercise catalog, pure scoring function, submission service
   src/me/                       Private /api/me routes and history query parsing
+  src/community/                Profiles, connections, blocks, invites, leaderboards
   src/database/setup.ts         Transactional migration runner
   scripts/setup-db.ts            Schema setup and optional sample-data seeding
   tests/                         Jest API and password tests
@@ -72,6 +73,7 @@ db/                             PostgreSQL schema, versioned migrations, sample 
 docs/authentication.md           Account implementation and code-review guide
 docs/workout-history.md          Private history contract, pagination, verification
 docs/workout-scoring.md          Scoring rules, retry safety, totals, edit/delete policy
+docs/community-and-profile.md    Privacy model, connections, invites, leaderboards, profile stats
 docs/backlog.md                  Starter tasks for Jira
 .circleci/config.yml             Install, typecheck, test, and build
 docs/ci.md                       CircleCI connection and backend validation guide
@@ -110,6 +112,20 @@ Signed-in users can save, score, and read their own workouts. These routes need 
 | PUT    | `/api/me/workouts/:id` | Same body as POST without `submissionKey` → 200, re-scored; 404 if not yours                                                   |
 | DELETE | `/api/me/workouts/:id` | 204; removes the workout and its award; 404 if not yours                                                                       |
 | GET    | `/api/me/points`       | 200 `{ total, awardedWorkouts, breakdown }`, the sum of your persisted awards; see [scoring](docs/workout-scoring.md)          |
+
+**Community and profile** (PostgreSQL and a session required; see [community and profile](docs/community-and-profile.md)):
+
+| Method      | Endpoint                             | Purpose                                                                        |
+| ----------- | ------------------------------------ | ------------------------------------------------------------------------------ |
+| GET / PATCH | `/api/me/profile`                    | Your profile, computed stats, badges; edit name, username, bio, goals, privacy |
+| GET / POST  | `/api/me/connections`                | List connections and requests; send by `handle` or connect by `inviteCode`     |
+| POST        | `/api/me/connections/:userId/accept` | Accept a request sent to you                                                   |
+| DELETE      | `/api/me/connections/:userId`        | Decline, cancel, or disconnect (no notification)                               |
+| GET / POST  | `/api/me/blocks`, DELETE `/:userId`  | List, block, unblock                                                           |
+| GET / POST  | `/api/me/invite`                     | Your invite code; POST makes a new one and invalidates old links               |
+| GET         | `/api/community/people?q=`           | Search public accounts by name or username (2–40 characters)                   |
+| GET         | `/api/community/leaderboard`         | `scope=global\|connections`, `range=week\|month\|all`                          |
+| GET         | `/api/invites/:code`                 | Public preview of an invite link: inviter's name and username only             |
 
 `name` is 1–120 characters, `category` is `strength`, `cardio`, or `mobility`, `durationMinutes` is a whole number from 1 to 1440, and `completedAt` is a real `YYYY-MM-DD` date that is not in the future. Any `userId` in the body is ignored. Saved workouts count toward goals and rankings immediately.
 

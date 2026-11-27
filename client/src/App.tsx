@@ -1,49 +1,17 @@
-import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import type { AuthUser } from "@gatorgainz/types";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import type { AuthUser, ConnectionsResponse, ExerciseDefinition as Workout, InvitePreview, NewWorkoutRequest, ProfileResponse, WorkoutHistoryItem } from "@gatorgainz/types";
+import { EXERCISE_CATALOG as workouts } from "@gatorgainz/types/exercise-catalog";
 import { getAuthErrorMessage, getCurrentUser, loginAccount, logoutAccount, registerAccount } from "./auth-api";
 import gatorMark from "./assets/gator-gainz-mark.png";
+import { Button, Card, getInitials, Icon, Label, PageTitle, StatCard, type IconName } from "./ui";
+import { api, ApiError, clearPendingInvite, errorMessage, localDate, pendingInvite } from "./api";
+import { Avatar, Community } from "./community";
+import { formatMinutes, Profile } from "./profile";
 
 type Tab = "home" | "log" | "community" | "profile";
 type Theme = "light" | "dark";
 type AuthMode = "login" | "register";
 type UserAccount = AuthUser;
-type IconName =
-  | "home"
-  | "plus"
-  | "users"
-  | "user"
-  | "bolt"
-  | "fire"
-  | "clock"
-  | "check"
-  | "chevron"
-  | "search"
-  | "trophy"
-  | "bell"
-  | "dumbbell"
-  | "calendar"
-  | "settings"
-  | "pin"
-  | "arrow"
-  | "lock"
-  | "logout";
-
-type Workout = {
-  name: string;
-  group: string;
-  difficulty: "Easy" | "Medium" | "Hard";
-  points: number;
-  tracking?: "strength" | "cardio";
-  cardioMetric?: {
-    label: string;
-    unit: string;
-    min: number;
-    max: number;
-    step: number;
-    initial: number;
-    baseline: number;
-  };
-};
 
 type SessionExercise = Workout & {
   id: string;
@@ -54,168 +22,10 @@ type SessionExercise = Workout & {
   earned: number;
 };
 
-type CompletedSession = {
-  name: string;
-  earned: number;
-  exerciseCount: number;
-  loggedAt: Date;
-};
-
-const workouts: Workout[] = [
-  { name: "Lat pull-down", group: "Back", difficulty: "Medium", points: 18 },
-  { name: "Barbell bench press", group: "Chest", difficulty: "Hard", points: 24 },
-  { name: "Back squat", group: "Legs", difficulty: "Hard", points: 28 },
-  { name: "Deadlift", group: "Full body", difficulty: "Hard", points: 32 },
-  { name: "Seated cable row", group: "Back", difficulty: "Medium", points: 18 },
-  { name: "Dumbbell shoulder press", group: "Shoulders", difficulty: "Medium", points: 20 },
-  { name: "Leg press", group: "Legs", difficulty: "Medium", points: 20 },
-  { name: "Incline dumbbell press", group: "Chest", difficulty: "Medium", points: 20 },
-  { name: "Pull-ups", group: "Back", difficulty: "Hard", points: 26 },
-  { name: "Romanian deadlift", group: "Legs", difficulty: "Hard", points: 26 },
-  { name: "Bicep curls", group: "Arms", difficulty: "Easy", points: 12 },
-  { name: "Tricep pushdown", group: "Arms", difficulty: "Easy", points: 12 },
-  { name: "Lateral raises", group: "Shoulders", difficulty: "Easy", points: 12 },
-  { name: "Walking lunges", group: "Legs", difficulty: "Medium", points: 18 },
-  { name: "Plank hold", group: "Core", difficulty: "Medium", points: 16 },
-  { name: "Hanging leg raises", group: "Core", difficulty: "Hard", points: 22 },
-  { name: "Chest-supported row", group: "Back", difficulty: "Medium", points: 19 },
-  { name: "Single-arm dumbbell row", group: "Back", difficulty: "Medium", points: 18 },
-  { name: "Face pulls", group: "Back", difficulty: "Easy", points: 12 },
-  { name: "Push-ups", group: "Chest", difficulty: "Easy", points: 13 },
-  { name: "Cable chest fly", group: "Chest", difficulty: "Medium", points: 17 },
-  { name: "Dumbbell floor press", group: "Chest", difficulty: "Medium", points: 18 },
-  { name: "Bulgarian split squat", group: "Legs", difficulty: "Hard", points: 27 },
-  { name: "Leg extension", group: "Legs", difficulty: "Easy", points: 13 },
-  { name: "Seated hamstring curl", group: "Legs", difficulty: "Medium", points: 16 },
-  { name: "Standing calf raise", group: "Legs", difficulty: "Easy", points: 11 },
-  { name: "Hammer curls", group: "Arms", difficulty: "Medium", points: 15 },
-  { name: "Skull crushers", group: "Arms", difficulty: "Medium", points: 17 },
-  { name: "Dips", group: "Arms", difficulty: "Hard", points: 23 },
-  { name: "Arnold press", group: "Shoulders", difficulty: "Hard", points: 23 },
-  { name: "Rear delt fly", group: "Shoulders", difficulty: "Easy", points: 13 },
-  { name: "Cable woodchop", group: "Core", difficulty: "Medium", points: 17 },
-  { name: "Ab wheel rollout", group: "Core", difficulty: "Hard", points: 24 },
-  { name: "Russian twists", group: "Core", difficulty: "Easy", points: 12 },
-  { name: "Kettlebell swings", group: "Full body", difficulty: "Hard", points: 27 },
-  { name: "Clean and press", group: "Full body", difficulty: "Hard", points: 31 },
-  { name: "Farmer carry", group: "Full body", difficulty: "Medium", points: 21 },
-  { name: "Incline barbell press", group: "Chest", difficulty: "Hard", points: 24 },
-  { name: "Decline bench press", group: "Chest", difficulty: "Medium", points: 20 },
-  { name: "Pec deck fly", group: "Chest", difficulty: "Easy", points: 14 },
-  { name: "Low-to-high cable fly", group: "Chest", difficulty: "Medium", points: 18 },
-  { name: "T-bar row", group: "Back", difficulty: "Hard", points: 24 },
-  { name: "Straight-arm pull-down", group: "Back", difficulty: "Medium", points: 17 },
-  { name: "Barbell shrugs", group: "Back", difficulty: "Medium", points: 18 },
-  { name: "Back extensions", group: "Back", difficulty: "Easy", points: 14 },
-  { name: "Reverse pec deck", group: "Back", difficulty: "Medium", points: 17 },
-  { name: "Front raises", group: "Shoulders", difficulty: "Easy", points: 12 },
-  { name: "Cable lateral raises", group: "Shoulders", difficulty: "Medium", points: 15 },
-  { name: "Upright row", group: "Shoulders", difficulty: "Medium", points: 17 },
-  { name: "Preacher curls", group: "Arms", difficulty: "Medium", points: 16 },
-  { name: "Incline dumbbell curls", group: "Arms", difficulty: "Medium", points: 16 },
-  { name: "Concentration curls", group: "Arms", difficulty: "Easy", points: 13 },
-  { name: "Overhead tricep extension", group: "Arms", difficulty: "Medium", points: 17 },
-  { name: "Close-grip bench press", group: "Arms", difficulty: "Hard", points: 22 },
-  { name: "Wrist curls", group: "Arms", difficulty: "Easy", points: 10 },
-  { name: "Reverse wrist curls", group: "Arms", difficulty: "Easy", points: 10 },
-  { name: "Cable crunches", group: "Core", difficulty: "Medium", points: 16 },
-  { name: "Side plank", group: "Core", difficulty: "Medium", points: 15 },
-  { name: "Pallof press", group: "Core", difficulty: "Medium", points: 16 },
-  { name: "Bicycle crunches", group: "Core", difficulty: "Easy", points: 12 },
-  { name: "Hip thrust", group: "Legs", difficulty: "Hard", points: 25 },
-  { name: "Glute bridge", group: "Legs", difficulty: "Easy", points: 13 },
-  { name: "Front squat", group: "Legs", difficulty: "Hard", points: 27 },
-  { name: "Hack squat", group: "Legs", difficulty: "Hard", points: 25 },
-  { name: "Lying leg curl", group: "Legs", difficulty: "Medium", points: 16 },
-  { name: "Hip adduction", group: "Legs", difficulty: "Easy", points: 12 },
-  { name: "Hip abduction", group: "Legs", difficulty: "Easy", points: 12 },
-  { name: "Donkey calf raise", group: "Legs", difficulty: "Medium", points: 15 },
-  { name: "Tibialis raise", group: "Legs", difficulty: "Easy", points: 10 },
-  { name: "Sled push", group: "Full body", difficulty: "Hard", points: 29 },
-  { name: "Dumbbell thrusters", group: "Full body", difficulty: "Hard", points: 28 },
-  { name: "Outdoor run", group: "Cardio", difficulty: "Medium", points: 22, tracking: "cardio", cardioMetric: { label: "Miles run", unit: "mi", min: 1, max: 30, step: 1, initial: 3, baseline: 3 } },
-  { name: "Treadmill run", group: "Cardio", difficulty: "Medium", points: 20, tracking: "cardio", cardioMetric: { label: "Miles run", unit: "mi", min: 1, max: 30, step: 1, initial: 3, baseline: 3 } },
-  { name: "Stadium stairs", group: "Cardio", difficulty: "Hard", points: 26, tracking: "cardio", cardioMetric: { label: "Stairs climbed", unit: "steps", min: 50, max: 5000, step: 50, initial: 500, baseline: 500 } },
-  { name: "Stair climber", group: "Cardio", difficulty: "Medium", points: 18, tracking: "cardio", cardioMetric: { label: "Floors climbed", unit: "floors", min: 5, max: 300, step: 5, initial: 30, baseline: 30 } },
-  { name: "Cycling", group: "Cardio", difficulty: "Medium", points: 19, tracking: "cardio", cardioMetric: { label: "Miles ridden", unit: "mi", min: 1, max: 100, step: 1, initial: 8, baseline: 8 } },
-  { name: "Swimming laps", group: "Cardio", difficulty: "Hard", points: 25, tracking: "cardio", cardioMetric: { label: "Laps completed", unit: "laps", min: 5, max: 300, step: 5, initial: 20, baseline: 20 } },
-  { name: "Rowing machine", group: "Cardio", difficulty: "Medium", points: 19, tracking: "cardio", cardioMetric: { label: "Meters rowed", unit: "m", min: 250, max: 20000, step: 250, initial: 2000, baseline: 2000 } },
-  { name: "Elliptical", group: "Cardio", difficulty: "Easy", points: 14, tracking: "cardio", cardioMetric: { label: "Miles completed", unit: "mi", min: 1, max: 30, step: 1, initial: 3, baseline: 3 } },
-  { name: "Brisk walk", group: "Cardio", difficulty: "Easy", points: 11, tracking: "cardio", cardioMetric: { label: "Miles walked", unit: "mi", min: 1, max: 30, step: 1, initial: 2, baseline: 2 } },
-  { name: "Jump rope", group: "Cardio", difficulty: "Easy", points: 14, tracking: "cardio", cardioMetric: { label: "Jumps completed", unit: "jumps", min: 50, max: 5000, step: 50, initial: 500, baseline: 500 } },
-  { name: "Burpees", group: "Cardio", difficulty: "Hard", points: 25 },
-];
-
-const leaders = [
-  { name: "Maya Chen", handle: "@mayamoves", points: 4280, initials: "MC", tone: "coral" },
-  { name: "Theo Brooks", handle: "@theolifts", points: 3945, initials: "TB", tone: "blue" },
-  { name: "Priya Rao", handle: "@priyaruns", points: 3710, initials: "PR", tone: "purple" },
-  { name: "Jordan Lee", handle: "@jordangetsfit", points: 3480, initials: "JL", tone: "green" },
-  { name: "Sam Rivera", handle: "@samstrong", points: 3205, initials: "SR", tone: "yellow" },
-];
-
-function getInitials(name: string) {
-  return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
-}
-
 function getFirstName(name: string) {
   return name.trim().split(/\s+/)[0] || "Gator";
 }
 
-function getHandle(user: UserAccount) {
-  return `@${user.email.split("@")[0].replace(/[^a-z0-9]/gi, "").toLowerCase()}`;
-}
-
-const iconPaths: Record<IconName, ReactNode> = {
-  home: <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5M9 21v-7h6v7" /></>,
-  plus: <><path d="M12 5v14M5 12h14" /></>,
-  users: <><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><path d="M19 8v6M22 11h-6" /></>,
-  user: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
-  bolt: <path d="m13 2-9 12h8l-1 8 9-12h-8l1-8Z" />,
-  fire: <path d="M12 22c4.4 0 7-3.2 7-7.3 0-3.2-1.8-6.3-5.2-9.4.2 3.2-1.7 5-3.2 5.8.1-3-1.3-5.2-3.1-6.6.1 3.7-2.5 5.6-2.5 9.9C5 18.6 7.8 22 12 22Z" />,
-  clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
-  check: <path d="m5 12 4 4L19 6" />,
-  chevron: <path d="m9 18 6-6-6-6" />,
-  search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
-  trophy: <><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM10 13v4M14 13v4M7 21h10M9 17h6" /><path d="M8 6H4v2a4 4 0 0 0 4 4M16 6h4v2a4 4 0 0 1-4 4" /></>,
-  bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" /></>,
-  dumbbell: <><path d="M6 7v10M3 9v6M18 7v10M21 9v6M6 12h12" /></>,
-  calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
-  settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></>,
-  pin: <><path d="m14 4 6 6-3 1-4 4-1 5-2-2-4 4-2-2 4-4-2-2 5-1 4-4 1-3Z" /></>,
-  arrow: <><path d="M5 12h14M14 7l5 5-5 5" /></>,
-  lock: <><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" /></>,
-  logout: <><path d="M10 17l5-5-5-5M15 12H3M15 4h5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5" /></>,
-};
-
-function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {iconPaths[name]}
-    </svg>
-  );
-}
-
-function Button({ children, className = "", onClick, disabled = false, label, type = "button" }: { children: ReactNode; className?: string; onClick?: () => void; disabled?: boolean; label?: string; type?: "button" | "submit" }) {
-  return <button type={type} aria-label={label} disabled={disabled} onClick={onClick} className={className}>{children}</button>;
-}
-
-function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`card ${className}`}>{children}</section>;
-}
-
-function Label({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`eyebrow ${className}`}>{children}</div>;
-}
-
-function PageTitle({ children, subtitle }: { children: ReactNode; subtitle?: string }) {
-  return (
-    <div>
-      <div className="page-title">{children}</div>
-      {subtitle && <p className="page-subtitle">{subtitle}</p>}
-    </div>
-  );
-}
 
 function Logo() {
   return (
@@ -227,7 +37,16 @@ function Logo() {
 }
 
 function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: UserAccount) => void }) {
-  const [mode, setMode] = useState<AuthMode>("login");
+  const [invite, setInvite] = useState<InvitePreview | null>(null);
+  const [mode, setMode] = useState<AuthMode>(() => (pendingInvite() ? "register" : "login"));
+  useEffect(() => {
+    const code = pendingInvite();
+    if (!code) return;
+    api.previewInvite(code).then(setInvite).catch(() => {
+      setInvite(null);
+      clearPendingInvite();
+    });
+  }, []);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -292,6 +111,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: UserAccount) 
       <div className="auth-brand"><Logo /><span>Train. Track. Rise.</span></div>
       <Card className="auth-card">
         <div className="auth-icon"><Icon name="lock" size={24} /></div>
+        {invite && <div className="invite-banner" role="status"><Icon name="users" size={16} /> <span><strong>{invite.fullName}</strong> (@{invite.handle}) invited you. Create an account or log in to connect.</span></div>}
         <Label>Welcome to the swamp</Label>
         <div className="auth-title">{mode === "login" ? "Get back in the game" : "Start your Gainz journey"}</div>
         <p className="auth-subtitle">{mode === "login" ? "Log in to keep your workouts, points, and progress moving." : "Create your account and make every workout count."}</p>
@@ -325,20 +145,21 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: UserAccount) 
             {isSubmitting ? "Please wait..." : mode === "login" ? "Log in to GatorGainz" : "Create my account"} <Icon name="arrow" size={17} />
           </Button>
         </form>
-        <p className="auth-footnote">Your account is saved on the server. Workouts currently stay in this browser.</p>
+        <p className="auth-footnote">Your account, workouts, and points are saved on the server and sync across your devices.</p>
       </Card>
       <div className="auth-stripe"><i /><i /></div>
     </main>
   );
 }
 
-function Sidebar({ tab, setTab, user }: { tab: Tab; setTab: (tab: Tab) => void; user: UserAccount }) {
+function Sidebar({ tab, setTab, user, profile }: { tab: Tab; setTab: (tab: Tab) => void; user: UserAccount; profile: ProfileResponse | null }) {
   const nav: { id: Tab; label: string; icon: IconName }[] = [
     { id: "home", label: "Overview", icon: "home" },
     { id: "log", label: "Log workout", icon: "plus" },
     { id: "community", label: "Community", icon: "users" },
     { id: "profile", label: "Account", icon: "user" },
   ];
+  const stats = profile?.stats;
   return (
     <>
       <aside className="sidebar">
@@ -357,13 +178,13 @@ function Sidebar({ tab, setTab, user }: { tab: Tab; setTab: (tab: Tab) => void; 
           <Card className="streak-card">
             <div className="streak-icon"><Icon name="fire" /></div>
             <div>
-              <strong>12 day streak</strong>
-              <span>Personal best</span>
+              <strong>{stats ? `${stats.currentStreakDays} day streak` : "Streak"}</strong>
+              <span>{stats ? (stats.currentStreakDays > 0 && stats.currentStreakDays >= stats.longestStreakDays ? "Personal best" : `Best: ${stats.longestStreakDays} days`) : "Loading..."}</span>
             </div>
           </Card>
           <Button className="mini-profile" onClick={() => setTab("profile")}>
             <div className="avatar avatar-green">{getInitials(user.fullName)}</div>
-            <div><strong>{user.fullName}</strong><span>Level 14</span></div>
+            <div><strong>{user.fullName}</strong><span>{stats ? `Level ${stats.level.level}` : ""}</span></div>
             <Icon name="chevron" size={16} />
           </Button>
         </div>
@@ -379,76 +200,71 @@ function Sidebar({ tab, setTab, user }: { tab: Tab; setTab: (tab: Tab) => void; 
   );
 }
 
-function TopBar({ title, points }: { title: string; points: number }) {
+function TopBar({ title, points, connections, onChanged, openCommunity }: { title: string; points: number | null; connections: ConnectionsResponse | null; onChanged: () => void; openCommunity: () => void }) {
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([
-    { id: "friend", title: "New friend request", detail: "Taylor Morgan wants to connect.", action: "Accept" },
-    { id: "squad", title: "Squad invitation", detail: "Gainesville Grinders invited you to join.", action: "Join" },
-  ]);
-  const resolveNotification = (id: string) => setNotifications((current) => current.filter((item) => item.id !== id));
+  const [error, setError] = useState("");
+  const incoming = connections?.incoming ?? [];
+  async function respond(userId: string, accept: boolean) {
+    setError("");
+    try {
+      if (accept) await api.acceptConnection(userId);
+      else await api.removeConnection(userId);
+      onChanged();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    }
+  }
   return (
     <header className="topbar">
       <div className="mobile-logo"><Logo /></div>
       <span className="topbar-name">{title}</span>
       <div className="top-actions">
-        <div className="points-pill"><Icon name="bolt" size={15} /><strong>{points.toLocaleString()}</strong><span>pts</span></div>
-        <Button className="icon-button" label="Notifications" onClick={() => setShowNotifications((visible) => !visible)}>
-          <Icon name="bell" size={19} />{notifications.length > 0 && <i />}
+        <div className="points-pill" title="Server-verified points"><Icon name="bolt" size={15} /><strong>{points === null ? "—" : points.toLocaleString()}</strong><span>pts</span></div>
+        <Button className="icon-button" label={`Notifications${incoming.length ? `: ${incoming.length} connection requests` : ""}`} onClick={() => {
+          // Refresh on open so new requests show without waiting for the next poll.
+          if (!showNotifications) onChanged();
+          setShowNotifications((visible) => !visible);
+        }}>
+          <Icon name="bell" size={19} />{incoming.length > 0 && <i />}
         </Button>
       </div>
       {showNotifications && (
         <Card className="notification-panel">
           <div className="notification-heading">
-            <div><Label>Updates</Label><div className="section-title">Notifications</div></div>
-            <span>{notifications.length} new</span>
+            <div><Label>Updates</Label><div className="section-title">Connection requests</div></div>
+            <span>{incoming.length} new</span>
           </div>
-          {notifications.length > 0 ? notifications.map((notification) => (
-            <div className="notification-row" key={notification.id}>
-              <div className={`notification-symbol ${notification.id}`}><Icon name={notification.id === "friend" ? "user" : "users"} size={17} /></div>
-              <div><strong>{notification.title}</strong><span>{notification.detail}</span></div>
-              <Button className="notification-action" onClick={() => resolveNotification(notification.id)}>{notification.action}</Button>
+          {error && <p className="auth-message" role="alert">{error}</p>}
+          {incoming.length > 0 ? incoming.map((person) => (
+            <div className="notification-row" key={person.userId}>
+              <Avatar userId={person.userId} name={person.fullName} />
+              <div><strong>{person.fullName}</strong><span>@{person.handle} wants to connect.</span></div>
+              <Button className="notification-action" onClick={() => respond(person.userId, true)}>Accept</Button>
+              <Button className="mini-text-button" label={`Decline ${person.fullName}`} onClick={() => respond(person.userId, false)}>Decline</Button>
             </div>
           )) : <p className="empty-message">You're all caught up.</p>}
+          <Button className="text-button" onClick={() => { setShowNotifications(false); openCommunity(); }}>Open Community <Icon name="chevron" size={14} /></Button>
         </Card>
       )}
     </header>
   );
 }
 
-function StatCard({ icon, label, value, detail, color }: { icon: IconName; label: string; value: string; detail: string; color: string }) {
-  return (
-    <Card className="stat-card">
-      <div className={`stat-icon ${color}`}><Icon name={icon} /></div>
-      <div>
-        <Label>{label}</Label>
-        <div className="stat-value">{value}</div>
-        <div className="stat-detail">{detail}</div>
-      </div>
-    </Card>
-  );
-}
-
-function WeeklyChart() {
-  const days = [
-    { day: "M", value: 68, done: true },
-    { day: "T", value: 45, done: true },
-    { day: "W", value: 86, done: true },
-    { day: "T", value: 62, done: true },
-    { day: "F", value: 98, done: true },
-    { day: "S", value: 28, done: false },
-    { day: "S", value: 12, done: false },
-  ];
+function WeeklyChart({ profile }: { profile: ProfileResponse | null }) {
+  const days = profile?.stats.last7Days ?? [];
+  const max = Math.max(1, ...days.map((day) => day.points));
+  const total = days.reduce((sum, day) => sum + day.points, 0);
   return (
     <Card className="activity-card">
       <div className="card-head">
-        <div><Label>This week</Label><div className="section-title">Your momentum</div></div>
-        <div className="trend"><Icon name="arrow" size={15} /> 18% vs last week</div>
+        <div><Label>Last 7 days</Label><div className="section-title">Your momentum</div></div>
+        <div className="trend"><Icon name="bolt" size={15} /> {total.toLocaleString()} pts</div>
       </div>
       <div className="chart">
-        {days.map((item, index) => (
-          <div className="bar-wrap" key={`${item.day}-${index}`}>
-            <div className="bar-track"><div className={`bar ${item.done ? "" : "future"}`} style={{ height: `${item.value}%` }} /></div>
-            <span>{item.day}</span>
+        {days.map((day) => (
+          <div className="bar-wrap" key={day.date} title={`${day.points} pts · ${day.workouts} workouts`}>
+            <div className="bar-track"><div className={`bar ${day.points ? "" : "future"}`} style={{ height: `${Math.max(day.points ? 6 : 2, Math.round((day.points / max) * 100))}%` }} /></div>
+            <span>{new Date(`${day.date}T12:00:00`).toLocaleDateString("en-US", { weekday: "narrow" })}</span>
           </div>
         ))}
       </div>
@@ -456,50 +272,56 @@ function WeeklyChart() {
   );
 }
 
-function ChallengeCard() {
+function ChallengeCard({ profile, goLog }: { profile: ProfileResponse | null; goLog: () => void }) {
+  const week = profile?.stats.thisWeek;
+  const percent = week ? Math.min(100, Math.round((week.workouts / week.goal) * 100)) : 0;
   return (
     <Card className="challenge-card">
       <div className="challenge-orb orb-one" />
       <div className="challenge-orb orb-two" />
       <div className="challenge-top">
-        <span className="challenge-badge"><Icon name="trophy" size={15} /> WEEKLY CHALLENGE</span>
-        <span>4 days left</span>
+        <span className="challenge-badge"><Icon name="trophy" size={15} /> WEEKLY GOAL</span>
+        <span>Last 7 days</span>
       </div>
-      <div className="challenge-title">The 1,000 point push</div>
-      <p>Earn 1,000 points this week and unlock the Momentum badge.</p>
+      <div className="challenge-title">{week ? `${week.goal} ${week.goal === 1 ? "workout" : "workouts"} this week` : "Your weekly goal"}</div>
+      <p>{week && week.workouts >= week.goal ? "Goal reached. Keep the momentum going!" : "Log workouts to fill the bar. Change your goal on the Account page."}</p>
       <div className="challenge-progress">
-        <div className="progress-copy"><strong>680</strong><span>/ 1,000 points</span><b>68%</b></div>
-        <div className="progress-track"><div style={{ width: "68%" }} /></div>
+        <div className="progress-copy"><strong>{week?.workouts ?? 0}</strong><span>/ {week?.goal ?? "—"} workouts · {(week?.points ?? 0).toLocaleString()} pts</span><b>{percent}%</b></div>
+        <div className="progress-track"><div style={{ width: `${percent}%` }} /></div>
       </div>
+      {week && week.workouts < week.goal && <Button className="text-button challenge-link" onClick={goLog}>Log a workout <Icon name="chevron" size={14} /></Button>}
     </Card>
   );
 }
 
-function RecentActivity({ latestSession }: { latestSession?: CompletedSession }) {
-  const entries = [
-    ...(latestSession ? [{
-      name: latestSession.name,
-      when: "Just now",
-      points: `+${latestSession.earned}`,
-      icon: "dumbbell" as IconName,
-      color: "mint",
-    }] : []),
-    { name: "Upper body strength", when: "Today, 7:42 AM", points: "+186", icon: "dumbbell" as IconName, color: "lavender" },
-    { name: "Morning run", when: "Yesterday, 6:18 AM", points: "+124", icon: "bolt" as IconName, color: "mint" },
-    { name: "Lower body power", when: "Mon, 5:35 PM", points: "+214", icon: "fire" as IconName, color: "coral" },
-  ].slice(0, 3);
+function RecentActivity({ refreshKey, goLog }: { refreshKey: number; goLog: () => void }) {
+  const [items, setItems] = useState<WorkoutHistoryItem[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    api.recentWorkouts(5)
+      .then((result) => active && setItems(result.items))
+      .catch((failure) => active && setError(errorMessage(failure)));
+    return () => { active = false; };
+  }, [refreshKey]);
+  const icon: Record<WorkoutHistoryItem["category"], [IconName, string]> = {
+    strength: ["dumbbell", "lavender"],
+    cardio: ["bolt", "mint"],
+    mobility: ["fire", "coral"],
+  };
   return (
     <Card className="recent-card">
       <div className="card-head">
         <div><Label>History</Label><div className="section-title">Recent activity</div></div>
-        <Button className="text-button">View all <Icon name="chevron" size={15} /></Button>
       </div>
+      {error && <p className="auth-message" role="alert">{error}</p>}
       <div className="activity-list">
-        {entries.map((entry) => (
-          <div className="activity-row" key={entry.name}>
-            <div className={`activity-icon ${entry.color}`}><Icon name={entry.icon} /></div>
-            <div className="activity-copy"><strong>{entry.name}</strong><span>{entry.when}</span></div>
-            <div className="activity-points">{entry.points} pts</div>
+        {items?.length === 0 && <p className="empty-message">No workouts yet. <Button className="text-button" onClick={goLog}>Log your first one</Button></p>}
+        {items?.map((item) => (
+          <div className="activity-row" key={item.id}>
+            <div className={`activity-icon ${icon[item.category][1]}`}><Icon name={icon[item.category][0]} /></div>
+            <div className="activity-copy"><strong>{item.name}</strong><span>{new Date(`${item.completedAt}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {formatMinutes(item.durationMinutes)}</span></div>
+            <div className="activity-points">{item.points === null ? "—" : `+${item.points.toLocaleString()} pts`}</div>
           </div>
         ))}
       </div>
@@ -507,25 +329,32 @@ function RecentActivity({ latestSession }: { latestSession?: CompletedSession })
   );
 }
 
-function Dashboard({ goLog, points, completed, latestSession, user }: { goLog: () => void; points: number; completed: number; latestSession?: CompletedSession; user: UserAccount }) {
+function greeting() {
+  const hour = new Date().getHours();
+  return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+}
+
+function Dashboard({ goLog, profile, user, refreshKey }: { goLog: () => void; profile: ProfileResponse | null; user: UserAccount; refreshKey: number }) {
+  const stats = profile?.stats;
+  const value = (number: number | undefined) => (number === undefined ? "—" : number.toLocaleString());
   return (
     <div className="page">
       <div className="welcome-row">
-        <PageTitle subtitle="Your consistency is paying off. Keep the pace.">Good morning, {getFirstName(user.fullName)}.</PageTitle>
+        <PageTitle subtitle={stats && stats.currentStreakDays > 1 ? `${stats.currentStreakDays} days in a row. Keep the pace.` : "Every logged workout earns server-verified points."}>{greeting()}, {getFirstName(user.fullName)}.</PageTitle>
         <Button className="primary-button" onClick={goLog}><Icon name="plus" size={18} /> Log a workout</Button>
       </div>
       <div className="stats-grid">
-        <StatCard icon="bolt" label="Total points" value={points.toLocaleString()} detail="+420 this week" color="yellow" />
-        <StatCard icon="fire" label="Current streak" value="12 days" detail="Best: 16 days" color="coral" />
-        <StatCard icon="clock" label="Active time" value="18h 20m" detail="This month" color="blue" />
-        <StatCard icon="check" label="Workouts" value={completed.toString()} detail={`${8 + (completed - 46)} this month`} color="green" />
+        <StatCard icon="bolt" label="Total points" value={value(stats?.totalPoints)} detail={stats ? `+${stats.thisWeek.points.toLocaleString()} in the last 7 days` : ""} color="yellow" />
+        <StatCard icon="fire" label="Current streak" value={stats ? `${stats.currentStreakDays} ${stats.currentStreakDays === 1 ? "day" : "days"}` : "—"} detail={stats ? `Best: ${stats.longestStreakDays} days` : ""} color="coral" />
+        <StatCard icon="clock" label="Active time" value={stats ? formatMinutes(stats.totalMinutes) : "—"} detail={stats ? `${formatMinutes(stats.thisWeek.minutes)} in the last 7 days` : ""} color="blue" />
+        <StatCard icon="check" label="Workouts" value={value(stats?.totalWorkouts)} detail={stats ? `${stats.thisWeek.workouts} in the last 7 days` : ""} color="green" />
       </div>
       <div className="dashboard-grid">
         <div className="dashboard-main">
-          <ChallengeCard />
-          <WeeklyChart />
+          <ChallengeCard profile={profile} goLog={goLog} />
+          <WeeklyChart profile={profile} />
         </div>
-        <RecentActivity latestSession={latestSession} />
+        <RecentActivity refreshKey={refreshKey} goLog={goLog} />
       </div>
     </div>
   );
@@ -705,15 +534,18 @@ function MuscleExplorer({ selected, onSelectRegion }: { selected: Workout; onSel
 }
 
 const sessionStorageKey = "gatorgainz-workout-session";
-const completedSessionsStorageKey = "gatorgainz-completed-sessions";
 const pinnedWorkoutsStorageKey = "gatorgainz-pinned-workouts";
 
 function accountStorageKey(key: string, userId: string) {
   return `${key}:${userId}`;
 }
 
+function newSubmissionKey() {
+  return window.crypto.randomUUID();
+}
+
 function loadSessionDraft(userId: string) {
-  const fallback = { selectedName: workouts[1].name, sets: 4, reps: 8, minutes: 30, metricValue: 3, exercises: [] as SessionExercise[] };
+  const fallback = { selectedName: workouts[1].name, sets: 4, reps: 8, minutes: 30, metricValue: 3, durationMinutes: 45, submissionKey: "", exercises: [] as SessionExercise[] };
   try {
     const saved = window.localStorage.getItem(accountStorageKey(sessionStorageKey, userId));
     return saved ? { ...fallback, ...JSON.parse(saved) } : fallback;
@@ -722,7 +554,7 @@ function loadSessionDraft(userId: string) {
   }
 }
 
-function WorkoutLogger({ userId, onComplete }: { userId: string; onComplete: (session: CompletedSession) => void }) {
+function WorkoutLogger({ userId, onSaved }: { userId: string; onSaved: (points: number | null) => void }) {
   const draftKey = accountStorageKey(sessionStorageKey, userId);
   const pinsKey = accountStorageKey(pinnedWorkoutsStorageKey, userId);
   const muscleMapKey = accountStorageKey("gatorgainz-show-muscle-map", userId);
@@ -736,6 +568,11 @@ function WorkoutLogger({ userId, onComplete }: { userId: string; onComplete: (se
   const [minutes, setMinutes] = useState(savedDraft.minutes);
   const [metricValue, setMetricValue] = useState(savedDraft.metricValue);
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>(savedDraft.exercises);
+  const [durationMinutes, setDurationMinutes] = useState<number>(savedDraft.durationMinutes);
+  // Kept with the draft so a retry after a lost response cannot save the session twice.
+  const [submissionKey, setSubmissionKey] = useState<string>(savedDraft.submissionKey || newSubmissionKey());
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [showMuscleMap, setShowMuscleMap] = useState(() => {
     const saved = window.localStorage.getItem(muscleMapKey);
     return saved !== "false";
@@ -769,9 +606,11 @@ function WorkoutLogger({ userId, onComplete }: { userId: string; onComplete: (se
       reps,
       minutes,
       metricValue,
+      durationMinutes,
+      submissionKey,
       exercises: sessionExercises,
     }));
-  }, [draftKey, selected, sets, reps, minutes, metricValue, sessionExercises]);
+  }, [draftKey, selected, sets, reps, minutes, metricValue, durationMinutes, submissionKey, sessionExercises]);
 
   useEffect(() => {
     window.localStorage.setItem(pinsKey, JSON.stringify(pinnedWorkouts));
@@ -823,16 +662,40 @@ function WorkoutLogger({ userId, onComplete }: { userId: string; onComplete: (se
     setSessionExercises((current) => current.filter((item) => item.id !== exercise.id));
   }
 
-  function submitSession() {
-    if (sessionExercises.length === 0) return;
-    onComplete({
-      name: `${sessionExercises.length}-exercise training session`,
-      earned: sessionPoints,
-      exerciseCount: sessionExercises.length,
-      loggedAt: new Date(),
-    });
-    setSessionExercises([]);
-    window.localStorage.removeItem(draftKey);
+  async function submitSession() {
+    if (sessionExercises.length === 0 || submitting) return;
+    const allCardio = sessionExercises.every((exercise) => exercise.tracking === "cardio");
+    const body: NewWorkoutRequest = {
+      name: `${sessionExercises.length}-exercise ${allCardio ? "cardio" : "training"} session`,
+      category: allCardio ? "cardio" : "strength",
+      durationMinutes,
+      completedAt: localDate(),
+      submissionKey,
+      // Only what was done is sent; the server looks up points itself.
+      exercises: sessionExercises.map((exercise) => exercise.tracking === "cardio"
+        ? { name: exercise.name, minutes: exercise.minutes, metricValue: exercise.metricValue }
+        : { name: exercise.name, sets: exercise.sets, reps: exercise.reps }),
+    };
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const result = await api.submitWorkout(body);
+      setSessionExercises([]);
+      setSubmissionKey(newSubmissionKey());
+      window.localStorage.removeItem(draftKey);
+      onSaved(result.award?.points ?? null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        // An earlier attempt was saved before this session was edited.
+        setSessionExercises([]);
+        setSubmissionKey(newSubmissionKey());
+        setSubmitError("This session was already saved earlier. Check Recent activity, then log any extra exercises as a new session.");
+      } else {
+        setSubmitError(`${errorMessage(error)} Your session is still here; try again.`);
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -908,7 +771,7 @@ function WorkoutLogger({ userId, onComplete }: { userId: string; onComplete: (se
             )}
           </div>
           <div className="points-preview">
-            <span>You'll earn</span>
+            <span>Estimated points</span>
             <div><Icon name="bolt" /><strong>{earned}</strong><span>points</span></div>
             <p>{isCardio ? `Based on ${minutes} min and ${metricValue.toLocaleString()} ${cardioMetric?.unit ?? ""}` : `Base ${selected.points} pts × ${sets} sets × volume`}</p>
           </div>
@@ -935,9 +798,14 @@ function WorkoutLogger({ userId, onComplete }: { userId: string; onComplete: (se
                 ))}
               </div>
             ) : <p className="empty-session">Add exercises above to build your workout.</p>}
-            <Button className="submit-session-button" disabled={sessionExercises.length === 0} onClick={submitSession}>
-              <Icon name="check" size={17} /> Submit session to Account
+            {sessionExercises.length > 0 && (
+              <div className="session-duration"><span>Session length (minutes)</span><Stepper value={durationMinutes} onChange={setDurationMinutes} min={5} max={600} step={5} /></div>
+            )}
+            {submitError && <p className="auth-message" role="alert">{submitError}</p>}
+            <Button className="submit-session-button" disabled={sessionExercises.length === 0 || submitting} onClick={submitSession}>
+              <Icon name="check" size={17} /> {submitting ? "Saving and scoring..." : "Submit session to Account"}
             </Button>
+            <p className="builder-note">Points are calculated by the server when you submit.</p>
           </div>
         </Card>
       </div>
@@ -945,225 +813,96 @@ function WorkoutLogger({ userId, onComplete }: { userId: string; onComplete: (se
   );
 }
 
-function Community({ points, user }: { points: number; user: UserAccount }) {
-  const [range, setRange] = useState("Weekly");
-  const [following, setFollowing] = useState<string[]>(["Maya Chen"]);
-  const [showPeople, setShowPeople] = useState(false);
-  const [peopleQuery, setPeopleQuery] = useState("");
-  const [showSquads, setShowSquads] = useState(false);
-  const [selectedSquad, setSelectedSquad] = useState("Weekend Warriors");
-  const squads = [
-    { name: "Weekend Warriors", points: 8620, progress: 74, remaining: 1380 },
-    { name: "Gainesville Grinders", points: 12480, progress: 88, remaining: 520 },
-    { name: "Sunrise Striders", points: 6940, progress: 61, remaining: 2060 },
-  ];
-  const activeSquad = squads.find((squad) => squad.name === selectedSquad) ?? squads[0];
-  const toggleFollow = (name: string) => setFollowing((current) => current.includes(name) ? current.filter((item) => item !== name) : [...current, name]);
-  const visibleLeaders = leaders.filter((leader) =>
-    leader.name.toLowerCase().includes(peopleQuery.toLowerCase()) ||
-    leader.handle.toLowerCase().includes(peopleQuery.toLowerCase()),
-  );
+function InvitePrompt({ onDone }: { onDone: () => void }) {
+  const [code] = useState(pendingInvite);
+  const [preview, setPreview] = useState<InvitePreview | null>(null);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!code) return;
+    api.previewInvite(code).then(setPreview).catch(() => {
+      clearPendingInvite();
+      setMessage("That invite link is no longer valid.");
+    });
+  }, [code]);
+  if (!code || (!preview && !message)) return null;
+  function dismiss() {
+    clearPendingInvite();
+    setPreview(null);
+    setMessage("");
+  }
+  async function connect() {
+    setBusy(true);
+    try {
+      const result = await api.connectByInvite(code!);
+      clearPendingInvite();
+      setPreview(null);
+      setMessage(`You are now connected with ${result.person.fullName}.`);
+      onDone();
+    } catch (error) {
+      clearPendingInvite();
+      setPreview(null);
+      setMessage(error instanceof ApiError && error.status === 400 ? "That is your own invite link." : errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
-    <div className="page">
-      <div className="welcome-row">
-        <PageTitle subtitle="Train together, climb the ranks, and celebrate every win.">Community</PageTitle>
-        <Button className="primary-button" onClick={() => setShowPeople((visible) => !visible)}><Icon name="users" size={18} /> {showPeople ? "Close search" : "Find people"}</Button>
-      </div>
-      {showPeople && (
-        <Card className="people-search-card">
-          <div>
-            <Label>Discover athletes</Label>
-            <div className="section-title">Find your training circle</div>
-          </div>
-          <div className="search-box"><Icon name="search" size={18} /><input autoFocus aria-label="Search people" value={peopleQuery} onChange={(event) => setPeopleQuery(event.target.value)} placeholder="Search by name or username" /></div>
-          <div className="people-results">
-            {visibleLeaders.map((leader) => (
-              <div className="person-chip" key={leader.name}>
-                <div className={`avatar avatar-${leader.tone}`}>{leader.initials}</div>
-                <div className="leader-copy"><strong>{leader.name}</strong><span>{leader.handle}</span></div>
-                <Button className={`follow-button ${following.includes(leader.name) ? "following" : ""}`} onClick={() => toggleFollow(leader.name)}>
-                  {following.includes(leader.name) ? "Following" : "Follow"}
-                </Button>
-              </div>
-            ))}
-            {visibleLeaders.length === 0 && <p className="empty-message">No athletes found. Try another name.</p>}
-          </div>
-        </Card>
-      )}
-      <div className="community-banner">
-        <div><Label>Global movement</Label><div className="community-number">18,492,610</div><span>points earned together this month</span></div>
-        <div className="banner-avatars">
-          {leaders.slice(0, 4).map((leader) => <div key={leader.name} className={`avatar avatar-${leader.tone}`}>{leader.initials}</div>)}
-          <div className="avatar avatar-more">+2k</div>
-        </div>
-      </div>
-      <div className="community-grid">
-        <Card className="leaderboard-card">
-          <div className="card-head leaderboard-head">
-            <div><Label>Leaderboard</Label><div className="section-title">Top movers</div></div>
-            <div className="range-toggle">
-              {["Weekly", "Monthly", "All time"].map((item) => <Button key={item} onClick={() => setRange(item)} className={range === item ? "active" : ""}>{item}</Button>)}
-            </div>
-          </div>
-          <div className="leader-list">
-            {leaders.map((leader, index) => (
-              <div className={`leader-row ${index === 0 ? "winner" : ""}`} key={leader.name}>
-                <div className={`rank rank-${index + 1}`}>{index + 1}</div>
-                <div className={`avatar avatar-${leader.tone}`}>{leader.initials}</div>
-                <div className="leader-copy"><strong>{leader.name}</strong><span>{leader.handle}</span></div>
-                <div className="leader-score"><Icon name="bolt" size={14} /><strong>{leader.points.toLocaleString()}</strong><span>pts</span></div>
-                <Button className={`follow-button ${following.includes(leader.name) ? "following" : ""}`} onClick={() => toggleFollow(leader.name)}>
-                  {following.includes(leader.name) ? "Following" : "Follow"}
-                </Button>
-              </div>
-            ))}
-          </div>
-          <div className="your-rank">
-            <div className="rank">18</div><div className="avatar avatar-green">{getInitials(user.fullName)}</div>
-            <div className="leader-copy"><strong>You</strong><span>Up 4 places this week</span></div>
-            <div className="leader-score"><Icon name="bolt" size={14} /><strong>{points.toLocaleString()}</strong><span>pts</span></div>
-          </div>
-        </Card>
-        <div className="community-side">
-          <Card className="squad-card">
-            <div className="card-head">
-              <div><Label>Your squads</Label><div className="section-title">Team progress</div></div>
-              <Button className="icon-button"><Icon name="settings" size={18} /></Button>
-            </div>
-            <div className="squad-select">
-              <Button className="squad-select-trigger" onClick={() => setShowSquads((visible) => !visible)}>
-                <span>{activeSquad.name}</span><Icon name="chevron" size={16} />
-              </Button>
-              {showSquads && (
-                <div className="squad-options">
-                  {squads.map((squad) => (
-                    <Button key={squad.name} className={selectedSquad === squad.name ? "active" : ""} onClick={() => { setSelectedSquad(squad.name); setShowSquads(false); }}>
-                      <span>{squad.name}</span>{selectedSquad === squad.name && <Icon name="check" size={15} />}
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="squad-score"><strong>{activeSquad.points.toLocaleString()}</strong><span>team points</span></div>
-            <div className="squad-progress"><span style={{ width: `${activeSquad.progress}%` }} /></div>
-            <p>{activeSquad.remaining.toLocaleString()} points until your next team reward.</p>
-          </Card>
-          <Card className="invite-card">
-            <div className="invite-icon"><Icon name="users" /></div>
-            <div><strong>Stronger together</strong><p>Invite friends and earn 100 points when they complete their first workout.</p></div>
-            <Button className="secondary-button">Share invite</Button>
-          </Card>
-        </div>
-      </div>
+    <div className="invite-prompt" role="status">
+      <Icon name="users" size={18} />
+      {preview
+        ? <><span><strong>{preview.fullName}</strong> (@{preview.handle}) invited you to train together.</span>
+            <Button className="primary-button" disabled={busy} onClick={connect}>{busy ? "Connecting..." : "Connect"}</Button>
+            <Button className="mini-text-button" onClick={dismiss}>Not now</Button></>
+        : <><span>{message}</span><Button className="mini-text-button" label="Dismiss" onClick={dismiss}><Icon name="x" size={14} /></Button></>}
     </div>
   );
 }
 
-function Profile({ points, completed, theme, setTheme, user, onLogout, isLoggingOut, logoutError }: { points: number; completed: number; theme: Theme; setTheme: (theme: Theme) => void; user: UserAccount; onLogout: () => void; isLoggingOut: boolean; logoutError: string }) {
-  const [showSettings, setShowSettings] = useState(false);
-  return (
-    <div className="page">
-      <div className="welcome-row">
-        <PageTitle subtitle="Your training journey, all in one place.">Account</PageTitle>
-        <Button className="secondary-button" onClick={() => setShowSettings((visible) => !visible)}><Icon name="settings" size={17} /> Settings</Button>
-      </div>
-      {showSettings && (
-        <Card className="settings-panel">
-          <div>
-            <Label>Appearance</Label>
-            <div className="section-title">Choose your app theme</div>
-            <p>Use a bright interface or reduce glare with dark mode.</p>
-          </div>
-          <div className="theme-options" aria-label="App theme">
-            <Button className={theme === "light" ? "active" : ""} onClick={() => setTheme("light")}>
-              <span className="theme-preview light-preview"><i /><i /><i /></span>
-              <span><strong>Light</strong><small>Bright and clear</small></span>
-              {theme === "light" && <Icon name="check" size={16} />}
-            </Button>
-            <Button className={theme === "dark" ? "active" : ""} onClick={() => setTheme("dark")}>
-              <span className="theme-preview dark-preview"><i /><i /><i /></span>
-              <span><strong>Dark</strong><small>Easy on the eyes</small></span>
-              {theme === "dark" && <Icon name="check" size={16} />}
-            </Button>
-          </div>
-          <Button className="secondary-button logout-button" onClick={onLogout} disabled={isLoggingOut}><Icon name="logout" size={17} /> {isLoggingOut ? "Logging out..." : "Log out of GatorGainz"}</Button>
-          {logoutError && <div className="auth-message" role="alert">{logoutError}</div>}
-        </Card>
-      )}
-      <Card className="profile-hero">
-        <div className="profile-avatar">{getInitials(user.fullName)}<div className="level-badge">14</div></div>
-        <div className="profile-identity">
-          <div className="profile-name">{user.fullName}</div>
-          <span>{getHandle(user)} · GatorGainz athlete</span>
-          <p>Building strength, finding balance, and always chasing the next personal best.</p>
-        </div>
-        <div className="profile-level">
-          <div><Label>Level 14</Label><span>{points.toLocaleString()} / 3,200 XP</span></div>
-          <div className="profile-progress"><span style={{ width: `${Math.min(100, Math.round((points / 3200) * 100))}%` }} /></div>
-          <small>{Math.max(0, 3200 - points).toLocaleString()} XP to Level 15</small>
-        </div>
-      </Card>
-      <div className="stats-grid profile-stats">
-        <StatCard icon="check" label="Workouts completed" value={completed.toString()} detail="Since January 2025" color="green" />
-        <StatCard icon="bolt" label="Current points" value={points.toLocaleString()} detail="Top 8% globally" color="yellow" />
-        <StatCard icon="clock" label="Training time" value="72h 15m" detail="1h 34m average" color="blue" />
-        <StatCard icon="fire" label="Longest streak" value="16 days" detail="Current: 12 days" color="coral" />
-      </div>
-      <div className="profile-grid">
-        <Card className="personal-info">
-          <div className="card-head"><div><Label>Account</Label><div className="section-title">Personal information</div></div></div>
-          <div className="info-grid">
-            <div><span>Full name</span><strong>{user.fullName}</strong></div>
-            <div><span>Email address</span><strong>{user.email}</strong></div>
-            <div><span>Member since</span><strong>{new Date(user.joinedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</strong></div>
-            <div><span>Primary goal</span><strong>Build strength</strong></div>
-            <div><span>Training level</span><strong>Intermediate</strong></div>
-            <div><span>Preferred units</span><strong>Imperial (lb)</strong></div>
-          </div>
-        </Card>
-        <Card className="achievements">
-          <div className="card-head"><div><Label>Milestones</Label><div className="section-title">Recent badges</div></div><Button className="text-button">View all</Button></div>
-          <div className="badge-grid">
-            <div><span className="badge-icon sun"><Icon name="fire" /></span><strong>On fire</strong><small>10 day streak</small></div>
-            <div><span className="badge-icon purple"><Icon name="trophy" /></span><strong>Top ten</strong><small>Weekly rank</small></div>
-            <div><span className="badge-icon mint"><Icon name="bolt" /></span><strong>Power hour</strong><small>60 min workout</small></div>
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function AuthenticatedApp({ currentUser, theme, setTheme, onLogout }: { currentUser: UserAccount; theme: Theme; setTheme: (theme: Theme) => void; onLogout: () => Promise<void> }) {
+function AuthenticatedApp({ currentUser, setCurrentUser, theme, setTheme, onLogout }: { currentUser: UserAccount; setCurrentUser: (user: UserAccount) => void; theme: Theme; setTheme: (theme: Theme) => void; onLogout: () => Promise<void> }) {
   const [tab, setTab] = useState<Tab>("home");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
-  const completedKey = accountStorageKey(completedSessionsStorageKey, currentUser.id);
-  const [sessionToastPoints, setSessionToastPoints] = useState<number | null>(null);
-  const [completedSessions, setCompletedSessions] = useState<CompletedSession[]>(() => {
-    try {
-      const saved = window.localStorage.getItem(completedKey);
-      return saved ? JSON.parse(saved).map((session: CompletedSession) => ({ ...session, loggedAt: new Date(session.loggedAt) })) : [];
-    } catch {
-      return [];
-    }
-  });
-  const earnedPoints = completedSessions.reduce((total, session) => total + session.earned, 0);
-  const points = 2840 + earnedPoints;
-  const completed = 46 + completedSessions.length;
+  const [toast, setToast] = useState<string | null>(null);
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  const [profileError, setProfileError] = useState("");
+  const [connections, setConnections] = useState<ConnectionsResponse | null>(null);
+  const [activityKey, setActivityKey] = useState(0);
   const titles = useMemo(() => ({ home: "Overview", log: "Log workout", community: "Community", profile: "Account" }), []);
-  useEffect(() => {
-    window.localStorage.setItem(completedKey, JSON.stringify(completedSessions));
-  }, [completedKey, completedSessions]);
-  useEffect(() => {
-    if (sessionToastPoints === null) return;
-    const timer = window.setTimeout(() => setSessionToastPoints(null), 3200);
-    return () => window.clearTimeout(timer);
-  }, [sessionToastPoints]);
 
-  function completeSession(session: CompletedSession) {
-    setCompletedSessions((current) => [session, ...current]);
-    setSessionToastPoints(session.earned);
+  const loadProfile = useCallback(() => {
+    setProfileError("");
+    api.profile().then(setProfile).catch((error) => setProfileError(errorMessage(error)));
+  }, []);
+  const loadConnections = useCallback(() => {
+    api.connections().then(setConnections).catch(() => undefined);
+  }, []);
+  const refreshCommunity = useCallback(() => {
+    loadConnections();
+    loadProfile();
+  }, [loadConnections, loadProfile]);
+
+  useEffect(() => {
+    loadProfile();
+    loadConnections();
+    // New connection requests show up without a reload.
+    const timer = window.setInterval(loadConnections, 60_000);
+    return () => window.clearInterval(timer);
+  }, [loadProfile, loadConnections]);
+  useEffect(() => {
+    if (toast === null) return;
+    const timer = window.setTimeout(() => setToast(null), 3600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  function profileChanged(result: ProfileResponse) {
+    setProfile(result);
+    if (result.profile.fullName !== currentUser.fullName) setCurrentUser({ ...currentUser, fullName: result.profile.fullName });
+  }
+  function workoutSaved(points: number | null) {
+    setToast(points === null ? "Workout saved." : `Workout saved · +${points.toLocaleString()} pts`);
+    setActivityKey((key) => key + 1);
+    loadProfile();
   }
   async function logout() {
     if (isLoggingOut) return;
@@ -1180,14 +919,15 @@ function AuthenticatedApp({ currentUser, theme, setTheme, onLogout }: { currentU
 
   return (
     <>
-      <Sidebar tab={tab} setTab={setTab} user={currentUser} />
+      <Sidebar tab={tab} setTab={setTab} user={currentUser} profile={profile} />
       <main className="main-area">
-        <TopBar title={titles[tab]} points={points} />
-        {tab === "home" && <Dashboard goLog={() => setTab("log")} points={points} completed={completed} latestSession={completedSessions[0]} user={currentUser} />}
-        {tab === "log" && <WorkoutLogger userId={currentUser.id} onComplete={completeSession} />}
-        {tab === "community" && <Community points={points} user={currentUser} />}
-        {tab === "profile" && <Profile points={points} completed={completed} theme={theme} setTheme={setTheme} user={currentUser} onLogout={logout} isLoggingOut={isLoggingOut} logoutError={logoutError} />}
-        {sessionToastPoints !== null && <div className="session-toast"><Icon name="bolt" size={17} /> Session points: +{sessionToastPoints}</div>}
+        <TopBar title={titles[tab]} points={profile?.stats.totalPoints ?? null} connections={connections} onChanged={refreshCommunity} openCommunity={() => setTab("community")} />
+        <InvitePrompt onDone={refreshCommunity} />
+        {tab === "home" && <Dashboard goLog={() => setTab("log")} profile={profile} user={currentUser} refreshKey={activityKey} />}
+        {tab === "log" && <WorkoutLogger userId={currentUser.id} onSaved={workoutSaved} />}
+        {tab === "community" && <Community user={currentUser} profile={profile} connections={connections} onChanged={refreshCommunity} />}
+        {tab === "profile" && <Profile data={profile} error={profileError} onRetry={loadProfile} onProfileChange={profileChanged} theme={theme} setTheme={setTheme} onLogout={logout} isLoggingOut={isLoggingOut} logoutError={logoutError} />}
+        {toast !== null && <div className="session-toast" role="status"><Icon name="bolt" size={17} /> {toast}</div>}
       </main>
     </>
   );
@@ -1261,7 +1001,7 @@ export default function App() {
       {isCheckingSession || sessionError
         ? <SessionStatus error={sessionError} onRetry={() => setSessionAttempt((attempt) => attempt + 1)} />
         : currentUser
-          ? <AuthenticatedApp key={currentUser.id} currentUser={currentUser} theme={theme} setTheme={setTheme} onLogout={logout} />
+          ? <AuthenticatedApp key={currentUser.id} currentUser={currentUser} setCurrentUser={setCurrentUser} theme={theme} setTheme={setTheme} onLogout={logout} />
           : <AuthScreen onAuthenticated={setCurrentUser} />}
     </div>
   );

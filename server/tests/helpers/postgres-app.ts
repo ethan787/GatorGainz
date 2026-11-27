@@ -6,13 +6,16 @@ import { createApp } from '../../src/app';
 import { createPostgresAuthStore } from '../../src/auth/store';
 import { createPostgresStore } from '../../src/data/postgres-store';
 import { initializeDatabase } from '../../src/database/setup';
+import { createPostgresCommunityStore } from '../../src/community/store';
 
 export const databaseUrl = process.env.TEST_DATABASE_URL;
 export const describePostgres = databaseUrl ? describe : describe.skip;
 export type App = ReturnType<typeof createApp>;
 
 /** A disposable schema with all migrations applied. Dropped in `close()`. */
-export async function createTestDatabase(prefix: 'gg_history_test' | 'gg_scoring_test') {
+export async function createTestDatabase(
+  prefix: 'gg_history_test' | 'gg_scoring_test' | 'gg_community_test',
+) {
   const schema = `${prefix}_${randomBytes(12).toString('hex')}`;
   if (!/^gg_[a-z]+_test_[a-f0-9]{24}$/.test(schema)) throw new Error('Unsafe test schema name.');
   const adminPool = new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 5000 });
@@ -34,7 +37,9 @@ export async function createTestDatabase(prefix: 'gg_history_test' | 'gg_scoring
   const startApi = (apiPool = newPool()) =>
     createApp(createPostgresStore(apiPool), {
       authStore: createPostgresAuthStore(apiPool),
+      communityStore: createPostgresCommunityStore(apiPool),
       authRateLimits: { loginMax: 1000, registerMax: 1000 },
+      invitePreviewMax: 1000,
     });
 
   return {
@@ -66,7 +71,7 @@ function sessionCookie(response: request.Response): string {
 const password = 'correct horse battery staple';
 
 export async function register(app: App, name: string) {
-  const email = `${name.toLowerCase()}-${randomBytes(4).toString('hex')}@example.test`;
+  const email = `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}-${randomBytes(4).toString('hex')}@example.test`;
   const response = await request(app)
     .post('/api/auth/register')
     .set('X-GatorGainz-Request', '1')

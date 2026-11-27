@@ -1263,3 +1263,104 @@ body {
   .auth-card { margin-top: calc(82px + env(safe-area-inset-top)); padding: 24px 20px; }
   .auth-title { font-size: 28px; }
 }
+
+/* ---- Community, connections, invites, and profile ---- */
+.connect-action { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.connect-action small { max-width: 160px; color: var(--coral); font-size: 8px; text-align: right; }
+.follow-button { display: inline-grid; place-items: center; }
+.follow-button.placeholder { visibility: hidden; }
+.follow-button:disabled { opacity: .6; cursor: default; }
+.leader-row.is-you { background: rgba(0, 33, 165, .06); border-radius: 12px; }
+.your-rank .leader-row { border: 0; padding: 0; width: 100%; }
+.range-toggle.range-row { margin: 10px 0 4px; width: fit-content; }
+.board-note { margin: 12px 0 0; color: var(--muted); font-size: 8px; line-height: 1.5; display: flex; gap: 5px; align-items: flex-start; }
+.count-pill { min-width: 28px; height: 24px; padding: 0 8px; border-radius: 12px; display: inline-grid; place-items: center; background: #e8eefb; color: var(--navy); font-size: 9px; font-weight: 800; }
+.connection-group { display: grid; gap: 4px; margin-top: 14px; }
+.connection-group > .eyebrow { margin-bottom: 2px; }
+.connection-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.connection-row:last-child { border-bottom: 0; }
+.connection-row .avatar { width: 30px; height: 30px; font-size: 9px; }
+.connection-row .leader-copy { flex: 1; min-width: 0; }
+.connection-row .leader-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-text-button { border: 0; background: transparent; color: var(--muted); font-size: 8px; font-weight: 800; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+.mini-text-button:hover { background: rgba(0, 33, 165, .07); color: var(--navy); }
+.mini-text-button.danger { color: #b3261e; }
+.invite-card .secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.invite-link { display: grid; gap: 4px; margin-top: 12px; text-align: left; }
+.invite-link span { color: var(--muted); font-size: 8px; font-weight: 700; }
+.invite-link input { width: 100%; height: 32px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: #f5f9f8; color: var(--ink); font-size: 9px; }
+.invite-status { margin: 10px 0 0; color: var(--green); font-size: 9px; font-weight: 700; }
+.invite-reset { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 8px; font-size: 8px; color: var(--muted); }
+.invite-card > .mini-text-button { margin-top: 8px; }
+.invite-banner { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 14px; padding: 10px 12px; border-radius: 10px; background: #e8eefb; color: var(--navy); font-size: 10px; line-height: 1.4; text-align: left; }
+.invite-prompt { display: flex; align-items: center; gap: 10px; margin: 18px 40px 0; padding: 12px 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: 11px; }
+.invite-prompt span { flex: 1; }
+.invite-prompt .primary-button { height: 32px; padding: 0 14px; }
+.notification-row { grid-template-columns: 34px minmax(0, 1fr) auto auto; }
+.notification-row .avatar { width: 32px; height: 32px; }
+.notification-panel > .text-button { margin-top: 10px; }
+.title-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.title-actions .secondary-button, .form-actions .secondary-button { display: inline-flex; align-items: center; gap: 6px; }
+.saved-note { display: flex; align-items: center; gap: 6px; margin: -6px 0 14px; color: var(--green); font-size: 10px; font-weight: 700; }
+.profile-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+.profile-form .card-head, .profile-form .wide { grid-column: 1 / -1; }
+.profile-form label { display: grid; gap: 5px; font-size: 9px; }
+.profile-form label > span, .profile-form legend { color: var(--muted); font-weight: 700; font-size: 8px; text-transform: uppercase; letter-spacing: .8px; }
+.profile-form input, .profile-form select, .profile-form textarea { width: 100%; min-height: 36px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink); font: inherit; font-size: 11px; }
+.profile-form textarea { resize: vertical; }
+.profile-form small { color: var(--muted); font-size: 8px; }
+.handle-input { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 9px; padding-left: 10px; background: var(--surface); }
+.handle-input b { color: var(--muted); font-size: 11px; }
+.handle-input input { border: 0 !important; }
+.visibility-options { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.visibility-options legend { margin-bottom: 6px; }
+.visibility-options label { display: flex; gap: 9px; align-items: flex-start; padding: 11px; border: 1px solid var(--line); border-radius: 11px; cursor: pointer; }
+.visibility-options label.active { border-color: var(--navy); background: rgba(0, 33, 165, .05); }
+.visibility-options input { width: auto; min-height: 0; margin-top: 2px; }
+.visibility-options strong, .visibility-options small { display: block; }
+.visibility-options strong { font-size: 10px; margin-bottom: 3px; }
+.form-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.form-actions .primary-button, .form-actions .secondary-button { height: 36px; padding: 0 16px; }
+.week-card, .privacy-card { padding: 22px; }
+.week-summary { color: var(--muted); font-size: 9px; margin: 0 0 12px; }
+.mini-chart { height: 80px; display: flex; gap: 8px; align-items: flex-end; }
+.mini-chart > div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 5px; }
+.mini-chart span { width: 100%; max-width: 22px; border-radius: 5px 5px 2px 2px; background: var(--navy); }
+.mini-chart span.empty { background: var(--line); }
+.mini-chart small { color: var(--muted); font-size: 8px; }
+.info-grid.compact { margin-top: 16px; gap: 12px; }
+.badge-grid { grid-template-columns: repeat(4, 1fr); }
+.badge-grid > .locked { opacity: .55; }
+.badge-icon.locked { color: var(--muted); background: #edf1f4; }
+.privacy-card p { color: var(--muted); font-size: 9px; line-height: 1.5; }
+.privacy-card ul { margin: 8px 0 14px; padding-left: 16px; color: var(--ink); font-size: 9px; line-height: 1.7; }
+.privacy-card .card-head > svg { color: var(--green); }
+.blocked-list { border-top: 1px solid var(--line); padding-top: 12px; }
+.session-duration { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0 4px; font-size: 9px; color: var(--muted); }
+.challenge-link { color: var(--yellow); margin-top: 10px; position: relative; }
+.recent-card .empty-message .text-button { display: inline-flex; font-size: 10px; }
+
+.app-shell[data-theme="dark"] .count-pill,
+.app-shell[data-theme="dark"] .invite-banner { background: rgba(110, 140, 255, .16); color: #c9d4ff; }
+.app-shell[data-theme="dark"] .invite-link input,
+.app-shell[data-theme="dark"] .profile-form input,
+.app-shell[data-theme="dark"] .profile-form select,
+.app-shell[data-theme="dark"] .profile-form textarea,
+.app-shell[data-theme="dark"] .handle-input { background: rgba(255, 255, 255, .04); border-color: var(--line); color: var(--ink); }
+.app-shell[data-theme="dark"] .leader-row.is-you,
+.app-shell[data-theme="dark"] .visibility-options label.active { background: rgba(110, 140, 255, .1); }
+.app-shell[data-theme="dark"] .mini-chart span { background: #6e8cff; }
+.app-shell[data-theme="dark"] .badge-icon.locked { background: rgba(255, 255, 255, .06); }
+.app-shell[data-theme="dark"] .mini-text-button:hover { background: rgba(255, 255, 255, .06); color: var(--ink); }
+
+@media (max-width: 760px) {
+  .invite-prompt { margin: 12px 16px 0; flex-wrap: wrap; }
+  .profile-form, .visibility-options { grid-template-columns: 1fr; }
+  .badge-grid { grid-template-columns: repeat(2, 1fr); }
+  .title-actions { width: 100%; }
+}
+.row-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 0 auto; }
+.row-actions .mini-text-button { padding: 2px 4px; }
+.profile-form { align-items: start; }
+.visibility-options label > span { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink); font-size: 9px; }
+.visibility-options label > span small { color: var(--muted); font-size: 8px; line-height: 1.45; }
